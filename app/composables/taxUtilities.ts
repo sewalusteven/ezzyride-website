@@ -7,6 +7,10 @@ export const useTaxUtilities = () => {
         const { data } = await $api.post<ApiResponse<TaxCalculatorResponse>>('/web/tax-calculator', payload)
         return data.data
     }
+    async function addEmail(email: string): Promise<ApiResponse<object>>{
+        const { data } = await $api.post<ApiResponse<TaxCalculatorResponse>>('/web/mailing-list', { email })
+        return data
+    }
 
     function formatCurrency(amount: number, currency: string): string {
         if (isNaN(amount)) {
@@ -24,6 +28,7 @@ export const useTaxUtilities = () => {
 
     return {
         fetchTaxes,
-        formatCurrency
+        formatCurrency,
+        addEmail
     }
 }

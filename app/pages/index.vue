@@ -19,9 +19,11 @@ const form = ref<TaxCalculatorPayload>({
   isEV: false
 })
 
+const mailingEmail = ref<string>("")
+
 const taxObject =  ref<TaxCalculatorResponse|undefined>()
 
-const { fetchTaxes, formatCurrency } =  useTaxUtilities()
+const { fetchTaxes, formatCurrency, addEmail } =  useTaxUtilities()
 
 const yearDropDown = computed<number[]|string[]>(() => {
   const year = new Date().getFullYear()
@@ -37,11 +39,37 @@ function submit(){
   if(form.value.cif === 0 || form.value.year === "" || form.value.engineSize === null){
     Loading.remove()
     Notify.failure("Please fill in all required fields")
+    form.value = {
+      cif: 0,
+      year: "",
+      engineSize: null,
+      make: "",
+      isEV: false
+    }
     return
   }
   fetchTaxes(form.value).then(res => {
     taxObject.value = res
     Loading.remove()
+  }).catch(err => {
+    Loading.remove()
+    Notify.failure(err.response.data.message)
+  })
+
+}
+
+function submitEmail(){
+  Loading.standard("Sending email...")
+  if(mailingEmail.value === ""){
+    Loading.remove()
+    Notify.failure("Please enter your email address")
+    return
+  }
+
+  addEmail(mailingEmail.value).then(res => {
+    Loading.remove()
+    mailingEmail.value = ""
+    Notify.success("Email sent successfully")
   }).catch(err => {
     Loading.remove()
     Notify.failure(err.response.data.message)
@@ -283,12 +311,12 @@ function submit(){
 
         <div class="text-center mt-12">
           <p class="text-lg mb-6">Be the first to know when these services launch!</p>
-          <div class="max-w-md mx-auto flex">
-            <input type="email" placeholder="Enter your email address" class="flex-1 bg-white px-4 py-3 rounded-l-lg text-gray-800 focus:outline-none">
-            <button class="bg-primary hover:bg-red-700 px-6 py-3 rounded-r-lg font-medium transition">
+          <form @submit.prevent="submitEmail" class="max-w-md mx-auto flex">
+            <input type="email" v-model="mailingEmail" placeholder="Enter your email address" class="flex-1 bg-white px-4 py-3 rounded-l-lg text-gray-800 focus:outline-none">
+            <button type="submit" class="bg-primary hover:bg-red-700 px-6 py-3 rounded-r-lg font-medium transition">
               Notify Me
             </button>
-          </div>
+          </form>
         </div>
       </div>
     </section>

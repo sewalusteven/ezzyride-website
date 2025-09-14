@@ -1,7 +1,7 @@
 export interface TaxCalculatorPayload {
     cif: number | null
     year: number | string
-    engineSize: number | null
+    isLuxury: boolean
     isEV: boolean
     make: string
 }

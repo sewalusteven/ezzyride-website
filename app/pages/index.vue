@@ -14,7 +14,7 @@ function toggleFAQ(tab: number){
 const form = ref<TaxCalculatorPayload>({
   cif: 0,
   year: "",
-  engineSize: null,
+  isLuxury: false,
   make: "",
   isEV: false
 })
@@ -36,21 +36,21 @@ const yearDropDown = computed<number[]|string[]>(() => {
 
 function submit(){
   Loading.standard("Calculating taxes...")
-  if(form.value.cif === 0 || form.value.year === "" || form.value.engineSize === null){
+  if(form.value.cif === 0 || form.value.year === ""){
     Loading.remove()
     Notify.failure("Please fill in all required fields")
-    form.value = {
-      cif: 0,
-      year: "",
-      engineSize: null,
-      make: "",
-      isEV: false
-    }
     return
   }
   fetchTaxes(form.value).then(res => {
     taxObject.value = res
     Loading.remove()
+    form.value = {
+      cif: 0,
+      year: "",
+      isLuxury: false,
+      make: "",
+      isEV: false
+    }
   }).catch(err => {
     Loading.remove()
     Notify.failure(err.response.data.message)
@@ -100,38 +100,38 @@ function submitEmail(){
             </h3>
 
             <form @submit.prevent="submit" class="space-y-6">
+              <div>
+                <label class="block text-gray-700 font-semibold mb-2">CIF Value (USD) <span class="text-red-600">*</span></label>
+                <input v-model="form.cif" type="number" id="cif-value" class="w-full bg-white p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition" placeholder="e.g. 15000">
+                <p class="text-sm text-gray-500 mt-1">Cost, Insurance, and Freight value of the vehicle</p>
+              </div>
+
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label class="block text-gray-700 font-semibold mb-2">Engine Capacity (cc) *</label>
-                  <input v-model="form.engineSize" type="number" id="engine-capacity" class="w-full bg-white p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition" placeholder="e.g. 2000">
-                  <p class="text-sm text-gray-500 mt-1">Enter engine size in cubic centimeters</p>
-                </div>
 
                 <div>
-                  <label class="block text-gray-700 font-semibold mb-2">Year of Manufacture *</label>
+                  <label class="block text-gray-700 font-semibold mb-2">Year of Manufacture <span class="text-red-600">*</span></label>
                   <select v-model="form.year" id="manufacture-year" class="w-full bg-white p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition">
                     <option value="">Select year</option>
                     <option v-for="(y, i) in yearDropDown" :key="i" :value="y">{{ y }}</option>
                   </select>
                 </div>
+                <div>
+                  <label class="gap-1 text-gray-700 font-semibold flex items-center mb-2">Vehicle Make & Model <span class="text-xs text-gray-500">(Optional)</span></label>
+                  <input v-model="form.make" type="text" id="vehicle-model" class="w-full p-4 bg-white border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition" placeholder="e.g. Mazda CX-5">
+
+                </div>
+
               </div>
 
-              <div>
-                <label class="block text-gray-700 font-semibold mb-2">CIF Value (USD) *</label>
-                <input v-model="form.cif" type="number" id="cif-value" class="w-full bg-white p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition" placeholder="e.g. 15000">
-                <p class="text-sm text-gray-500 mt-1">Cost, Insurance, and Freight value of the vehicle</p>
-              </div>
-
-              <div>
-                <label class="block text-gray-700 font-semibold mb-2">Vehicle Make & Model</label>
-                <input v-model="form.make" type="text" id="vehicle-model" class="w-full p-4 bg-white border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition" placeholder="e.g. Mazda CX-5">
-                <p class="text-sm text-gray-500 mt-1">Optional: helps with more accurate calculations</p>
-              </div>
 
               <div class="bg-blue-50 p-4 rounded-lg">
                 <div class="flex items-center mb-2">
                   <input v-model="form.isEV" :value="true" type="checkbox" id="first-time-import" class="mr-2 scale-125">
                   <label for="first-time-import" class="text-gray-700 font-medium">Is this an Electric Vehicle (EV) ?</label>
+                </div>
+                <div class="flex items-center mb-2">
+                  <input v-model="form.isLuxury" :value="true" type="checkbox" id="first-time-import" class="mr-2 scale-125">
+                  <label for="first-luxury" class="text-gray-700 font-medium">Is Vehicle categorized as luxury?</label>
                 </div>
               </div>
 
@@ -152,7 +152,7 @@ function submitEmail(){
               <!-- Vehicle Summary -->
               <div class="bg-white/10 p-4 rounded-lg">
                 <h4 class="font-semibold mb-2 text-primary">Vehicle Summary</h4>
-                <div class="grid grid-cols-2 gap-4 text-sm">
+                <div class="grid lg:grid-cols-2 gap-4 text-sm">
                   <div>
                     <span class="text-gray-300">USD Rate:</span>
                     <span id="summary-type" class="ml-2 font-medium">{{ taxObject ? formatCurrency(taxObject.usdRate, 'UGX') : '-' }}</span>
@@ -167,49 +167,50 @@ function submitEmail(){
 
               <!-- Tax Calculations -->
               <div class="space-y-4">
-                <div class="flex justify-between items-center pb-2 border-b border-white/20">
+                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center pb-2 border-b border-white/20">
                                 <span class="flex items-center">
                                     <i class="fa-solid fa-percent text-primary mr-2"></i>
                                     Import Duty (25%)
                                 </span>
                   <span id="import-duty" class="font-bold text-lg">{{ taxObject ? formatCurrency(taxObject.importDuty, "UGX") : '--' }}</span>
                 </div>
-                <div class="flex justify-between items-center pb-2 border-b border-white/20">
-                                <span class="flex items-center">
-                                    <i class="fa-solid fa-coins text-primary mr-2"></i>
-                                    Excise Duty (Variable)
-                                </span>
-                  <span id="excise-duty" class="font-bold text-lg">{{ taxObject ? formatCurrency(taxObject.exciseDuty, "UGX") : '--' }}</span>
-                </div>
-                <div class="flex justify-between items-center pb-2 border-b border-white/20">
+
+                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center  pb-2 border-b border-white/20">
                                 <span class="flex items-center">
                                     <i class="fa-solid fa-receipt text-primary mr-2"></i>
                                     VAT (18%)
                                 </span>
                   <span id="vat-amount" class="font-bold text-lg">{{ taxObject ? formatCurrency(taxObject.vat, "UGX") : '--' }}</span>
                 </div>
-                <div class="flex justify-between items-center pb-2 border-b border-white/20">
+                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center  pb-2 border-b border-white/20">
                                 <span class="flex items-center">
                                     <i class="fa-solid fa-road text-primary mr-2"></i>
                                     Infrastructure Levy (1.5%)
                                 </span>
                   <span id="infrastructure-levy" class="font-bold text-lg">{{ taxObject ? formatCurrency(taxObject.infrastructureTax, "UGX") : '--' }}</span>
                 </div>
-                <div class="flex justify-between items-center pb-2 border-b border-white/20">
+                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center  pb-2 border-b border-white/20">
                                 <span class="flex items-center">
                                     <i class="fa-solid fa-leaf text-primary mr-2"></i>
                                     Environmental Levy
                                 </span>
                   <span id="environmental-levy" class="font-bold text-lg">{{ taxObject ? formatCurrency(taxObject.envLevy, "UGX") : '--' }}</span>
                 </div>
-                <div class="flex justify-between items-center pb-2 border-b border-white/20">
+                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center  pb-2 border-b border-white/20">
                                 <span class="flex items-center">
                                     <i class="fa-solid fa-file-alt text-primary mr-2"></i>
                                     Withholding
                                 </span>
                   <span id="registration-fees" class="font-bold text-lg">{{ taxObject ? formatCurrency(taxObject.withholding, "UGX") : '--' }}</span>
                 </div>
-                <div class="flex justify-between items-center pb-2 border-b border-white/20">
+                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center  pb-2 border-b border-white/20">
+                                <span class="flex items-center">
+                                    <i class="fa-solid fa-coins text-primary mr-2"></i>
+                                    Other Fees
+                                </span>
+                  <span id="excise-duty" class="font-bold text-lg">{{ taxObject ? formatCurrency(taxObject.stampDuty + taxObject.registrationFees + taxObject.formFees, "UGX") : '--' }}</span>
+                </div>
+                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center  pb-2 border-b border-white/20">
                                 <span class="flex items-center font-bold uppercase">
                                     <i class="fa-solid fa-money-bill text-primary mr-2"></i>
                                     Total Taxes
@@ -220,7 +221,7 @@ function submitEmail(){
 
               <!-- Total -->
               <div class="bg-primary/20 p-4 rounded-lg">
-                <div class="flex justify-between items-center text-2xl font-bold">
+                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center  text-2xl font-bold">
                   <span>Total Estimated Cost</span>
                   <span id="total-cost" class="text-primary">{{ taxObject ? formatCurrency(taxObject.totalCarValue, "UGX") : '--' }}</span>
                 </div>

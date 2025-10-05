@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineNuxtConfig({
   app: {
     head: {
-      title: "EzzyDrive Uganda",
+      title: "EzzyRide Uganda",
       htmlAttrs: {
         lang: 'en',
       },

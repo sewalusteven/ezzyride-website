@@ -5,7 +5,7 @@ import Footer from "~/components/Footer.vue";
 import "@fortawesome/fontawesome-free/css/all.min.css"
 
 useSeoMeta({
-  title: 'EzzyDrive Uganda | URA Tax Calculator',
+  title: 'EzzyRide Uganda | URA Tax Calculator',
   description: 'This site allows you to calculate the Uganda Revenue Authority (URA) Vehicle Taxes',
 })
 

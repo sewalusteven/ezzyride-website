@@ -27,3 +27,22 @@ export interface ApiResponse<T> {
     message: string
     data: T
 }
+
+export interface VehicleValuation {
+    id: number
+    name: string
+    hsc: string
+    model: string
+    year: string
+    origin: string
+    cc: string
+    unit: string
+    cif: string
+    batch: BatchInfo
+}
+
+export interface BatchInfo{
+    id: number
+    title: string
+    review_date: string
+}

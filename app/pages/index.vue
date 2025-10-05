@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import {computed, ref} from "vue";
-import type {TaxCalculatorPayload, TaxCalculatorResponse} from "@/types";
+import type {TaxCalculatorPayload, TaxCalculatorResponse, VehicleValuation} from "@/types";
 
 import {Loading, Notify} from "notiflix";
 import {useTaxUtilities} from "~/composables/taxUtilities";
+import UraValuationSearch from "~/components/UraValuationSearch.vue";
 
 const currFaq =  ref<number>(0)
 
@@ -77,6 +78,14 @@ function submitEmail(){
 
 }
 
+const valuationSelection = ref("ura")
+
+function prefillVehicle(vehicle:VehicleValuation){
+  form.value.cif = +vehicle.cif
+  form.value.year = vehicle.year
+  form.value.make = vehicle.name
+}
+
 </script>
 
 <template>
@@ -100,28 +109,75 @@ function submitEmail(){
             </h3>
 
             <form @submit.prevent="submit" class="space-y-6">
-              <div>
-                <label class="block text-gray-700 font-semibold mb-2">CIF Value (USD) <span class="text-red-600">*</span></label>
-                <input v-model="form.cif" type="number" id="cif-value" class="w-full bg-white p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition" placeholder="e.g. 15000">
-                <p class="text-sm text-gray-500 mt-1">Cost, Insurance, and Freight value of the vehicle</p>
+              <div class="bg-white p-6 rounded-lg border-2 border-gray-200">
+                <label class="block text-gray-700 font-semibold mb-4">Choose Valuation Method *</label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="relative">
+                    <input type="radio" v-model="valuationSelection" id="ura-valuation" name="valuation-method" value="ura" class="peer sr-only">
+                    <label for="ura-valuation" class="flex flex-col p-4 border-2 border-gray-300 rounded-lg cursor-pointer peer-checked:border-primary peer-checked:bg-primary/5 hover:border-primary/50 transition">
+                      <div class="flex items-center justify-between mb-2">
+                        <span class="font-medium text-secondary">URA Official Valuation</span>
+                        <i class="fa-solid fa-check-circle text-primary opacity-0 peer-checked:opacity-100"></i>
+                      </div>
+                      <p class="text-sm text-gray-600">Use official URA vehicle valuations database</p>
+                      <div class="mt-2 text-xs text-green-600 font-medium">
+                        <i class="fa-solid fa-star mr-1"></i>Recommended - Most Accurate
+                      </div>
+                    </label>
+                  </div>
+
+                  <div class="relative">
+                    <input type="radio" v-model="valuationSelection" id="custom-cif" name="valuation-method" value="custom" class="peer sr-only">
+                    <label for="custom-cif" class="flex flex-col p-4 border-2 border-gray-300 rounded-lg cursor-pointer peer-checked:border-primary peer-checked:bg-primary/5 hover:border-primary/50 transition">
+                      <div class="flex items-center justify-between mb-2">
+                        <span class="font-medium text-secondary">Custom CIF Value</span>
+                        <i class="fa-solid fa-check-circle text-primary opacity-0 peer-checked:opacity-100"></i>
+                      </div>
+                      <p class="text-sm text-gray-600">Enter your own CIF value manually</p>
+                      <div class="mt-2 text-xs text-gray-600">
+                        <i class="fa-solid fa-edit mr-1"></i>Manual Entry
+                      </div>
+                    </label>
+                  </div>
+                </div>
               </div>
 
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <UraValuationSearch v-if="valuationSelection === 'ura'" @vehicle-selected="prefillVehicle" />
+
+              <div v-if="valuationSelection === 'custom'" id="custom-section" class=" space-y-6">
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <div class="flex items-center mb-2">
+                    <i class="fa-solid fa-edit text-blue-600 mr-2"></i>
+                    <h4 class="font-medium text-blue-800">Custom CIF Entry</h4>
+                  </div>
+                  <p class="text-sm text-blue-700">Enter your vehicle details and CIF value manually for tax calculation.</p>
+                </div>
 
                 <div>
-                  <label class="block text-gray-700 font-semibold mb-2">Year of Manufacture <span class="text-red-600">*</span></label>
-                  <select v-model="form.year" id="manufacture-year" class="w-full bg-white p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition">
-                    <option value="">Select year</option>
-                    <option v-for="(y, i) in yearDropDown" :key="i" :value="y">{{ y }}</option>
-                  </select>
+                  <label class="block text-gray-700 font-semibold mb-2">CIF Value (USD) <span class="text-red-600">*</span></label>
+                  <input v-model="form.cif" type="number" id="cif-value" class="w-full bg-white p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition" placeholder="e.g. 15000">
+                  <p class="text-sm text-gray-500 mt-1">Cost, Insurance, and Freight value of the vehicle</p>
                 </div>
-                <div>
-                  <label class="gap-1 text-gray-700 font-semibold flex items-center mb-2">Vehicle Make & Model <span class="text-xs text-gray-500">(Optional)</span></label>
-                  <input v-model="form.make" type="text" id="vehicle-model" class="w-full p-4 bg-white border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition" placeholder="e.g. Mazda CX-5">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                  <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Year of Manufacture <span class="text-red-600">*</span></label>
+                    <select v-model="form.year" id="manufacture-year" class="w-full bg-white p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition">
+                      <option value="">Select year</option>
+                      <option v-for="(y, i) in yearDropDown" :key="i" :value="y">{{ y }}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="gap-1 text-gray-700 font-semibold flex items-center mb-2">Vehicle Make & Model <span class="text-xs text-gray-500">(Optional)</span></label>
+                    <input v-model="form.make" type="text" id="vehicle-model" class="w-full p-4 bg-white border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition" placeholder="e.g. Mazda CX-5">
+
+                  </div>
 
                 </div>
 
               </div>
+
 
 
               <div class="bg-blue-50 p-4 rounded-lg">
@@ -210,7 +266,7 @@ function submitEmail(){
                                 </span>
                   <span id="excise-duty" class="font-bold text-lg">{{ taxObject ? formatCurrency(taxObject.stampDuty + taxObject.registrationFees + taxObject.formFees, "UGX") : '--' }}</span>
                 </div>
-                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center  pb-2 border-b border-white/20">
+                <div v-if="valuationSelection === 'custom'" class="flex flex-col lg:flex-row lg:justify-between lg:items-center  pb-2 border-b border-white/20">
                                 <span class="flex items-center font-bold uppercase">
                                     <i class="fa-solid fa-money-bill text-primary mr-2"></i>
                                     Total Taxes
@@ -220,12 +276,18 @@ function submitEmail(){
               </div>
 
               <!-- Total -->
-              <div class="bg-primary/20 p-4 rounded-lg">
+              <div v-if="valuationSelection === 'custom'" class="bg-primary/20 p-4 rounded-lg">
                 <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center  text-2xl font-bold">
-                  <span>Total Estimated Cost</span>
+                  <span>Est. Total Cost</span>
                   <span id="total-cost" class="text-primary">{{ taxObject ? formatCurrency(taxObject.totalCarValue, "UGX") : '--' }}</span>
                 </div>
                 <p class="text-sm text-gray-200 mt-2">Including all taxes, duties, and fees</p>
+              </div>
+              <div v-else class="bg-primary/20 p-4 rounded-lg">
+                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center  text-2xl font-bold">
+                  <span>Est. Total Taxes</span>
+                  <span id="total-cost" class="text-primary">{{ taxObject ? formatCurrency(taxObject.totalTax, "UGX") : '--' }}</span>
+                </div>
               </div>
 
               <!-- Disclaimer -->

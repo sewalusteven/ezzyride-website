@@ -7,6 +7,13 @@ export default defineNuxtConfig({
       htmlAttrs: {
         lang: 'en',
       },
+      script: [
+        {
+          src: 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2236769161033149',
+          async: true,
+          crossorigin: 'anonymous',
+        },
+      ],
       link: [
         { rel: 'icon', type: 'image/x-icon', href: '/fav.png' },
       ]

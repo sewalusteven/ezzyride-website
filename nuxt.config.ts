@@ -21,7 +21,8 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      beUrl: 'http://localhost/api'
+      beUrl: 'http://localhost/api',
+      storageUrl: 'http://localhost/storage',
     }
   },
   compatibilityDate: '2025-07-15',

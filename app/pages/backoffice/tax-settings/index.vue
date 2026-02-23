@@ -57,7 +57,7 @@ const loadConfig = async () => {
     const configs: TaxConfig[] = data.data
 
     if (configs.length) {
-      const current = configs[0]
+      const current = configs[0]!
       form.value = {
         usdRate:               current.usdRate,
         importDutyRate:        current.importDutyRate,

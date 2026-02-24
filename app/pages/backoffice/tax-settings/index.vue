@@ -124,7 +124,7 @@ const fmtUGX = (n: number) =>
       </div>
       <button
         :disabled="saving || loading"
-        class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-60"
+        class="flex items-center gap-2 px-4 py-2 cursor-pointer bg-primary text-white rounded-md text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-60"
         @click="save"
       >
         <i v-if="saving" class="fa-solid fa-spinner fa-spin"></i>

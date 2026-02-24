@@ -192,14 +192,14 @@ const pages = computed(() => {
       </div>
       <div class="flex items-center gap-3">
         <button
-          class="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+          class="flex items-center cursor-pointer gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors"
           @click="showImport = true"
         >
           <i class="fa-solid fa-file-excel text-green-600"></i>
           Import Excel
         </button>
         <button
-          class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+          class="flex items-center  cursor-pointer gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
           @click="showAdd = true"
         >
           <i class="fa-solid fa-plus"></i>
@@ -440,10 +440,10 @@ const pages = computed(() => {
 
           <!-- Footer -->
           <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
-            <button class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900" @click="closeImport">Cancel</button>
+            <button class="px-4 cursor-pointer py-2 text-sm text-gray-600 hover:text-gray-900" @click="closeImport">Cancel</button>
             <button
               :disabled="importing"
-              class="flex items-center gap-2 px-5 py-2 bg-primary text-white text-sm rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
+              class="flex items-center cursor-pointer gap-2 px-5 py-2 bg-primary text-white text-sm rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
               @click="handleImport"
             >
               <i v-if="importing" class="fa-solid fa-spinner fa-spin"></i>
@@ -562,10 +562,10 @@ const pages = computed(() => {
 
           <!-- Footer -->
           <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
-            <button class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900" @click="closeAdd">Cancel</button>
+            <button class="px-4 py-2 cursor-pointer text-sm text-gray-600 hover:text-gray-900" @click="closeAdd">Cancel</button>
             <button
               :disabled="adding"
-              class="flex items-center gap-2 px-5 py-2 bg-primary text-white text-sm rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
+              class="flex items-center cursor-pointer gap-2 px-5 py-2 bg-primary text-white text-sm rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
               @click="handleAdd"
             >
               <i v-if="adding" class="fa-solid fa-spinner fa-spin"></i>

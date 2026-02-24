@@ -36,7 +36,7 @@ export const useAuth = () => {
     } finally {
       token.value = null
       user.value = null
-      await navigateTo('/backoffice/auth')
+      await navigateTo('/auth')
     }
   }
 

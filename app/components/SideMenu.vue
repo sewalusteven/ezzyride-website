@@ -10,8 +10,10 @@ const handleLogout = async () => {
 
 const navItems = [
   { label: 'Dashboard',    icon: 'fa-chart-line', to: '/backoffice' },
-  { label: 'Vehicles',     icon: 'fa-car',        to: '/backoffice/vehicles' },
-  { label: 'Valuations',   icon: 'fa-chart-bar',  to: '/backoffice/valuations' },
+  { label: 'Vehicles',     icon: 'fa-car',             to: '/backoffice/vehicles' },
+  { label: 'Customers',    icon: 'fa-users',           to: '/backoffice/customers' },
+  { label: 'Transactions', icon: 'fa-money-bill-wave', to: '/backoffice/transactions' },
+  { label: 'Valuations',   icon: 'fa-chart-bar',       to: '/backoffice/valuations' },
   { label: 'Tax Settings', icon: 'fa-calculator', to: '/backoffice/tax-settings' },
   { label: 'Inquiries',    icon: 'fa-envelope',   to: '/backoffice/inquiries' },
   { label: 'Users',        icon: 'fa-users',      to: '/backoffice/users' },

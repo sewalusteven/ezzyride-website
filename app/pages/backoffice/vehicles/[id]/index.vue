@@ -28,6 +28,13 @@ const paymentForm = ref({ amount: '', payment_method: 'cash', reference_number: 
 const addingPayment = ref(false)
 const paymentError = ref('')
 
+const saleCustomerEmail = computed(() => {
+  const custId = vehicle.value?.sale?.customer_id
+  if (!custId) return null
+  const c = customers.value.find((c: any) => c.id === Number(custId))
+  return c?.email ?? null
+})
+
 // Sale form
 const saleForm = ref({ agreed_price: '', reservation_deposit: '', notes: '', sale_date: '', customer_id: '' })
 const savingSale = ref(false)
@@ -661,6 +668,11 @@ const cancelConfirm = () => { confirmState.value.show = false }
               <div v-if="paymentError" class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">{{ paymentError }}</div>
               <div v-if="!vehicle.sale" class="text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-md p-3"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i>Set up sale information in the Client tab first.</div>
               <template v-else>
+                <div v-if="vehicle.sale.customer_id && !saleCustomerEmail" class="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md p-3">
+                  <i class="fa-solid fa-envelope-slash mr-1.5"></i>
+                  No email on file for this customer — receipt will not be sent.
+                  <NuxtLink :to="`/backoffice/customers/${vehicle.sale.customer_id}`" class="underline ml-1 font-medium">Add email</NuxtLink>
+                </div>
                 <div class="grid grid-cols-2 gap-4">
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Amount (UGX)</label>

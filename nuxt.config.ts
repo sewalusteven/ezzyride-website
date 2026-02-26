@@ -16,6 +16,7 @@ export default defineNuxtConfig({
       ],
       link: [
         { rel: 'icon', type: 'image/x-icon', href: '/fav.png' },
+        { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.0.1/css/all.min.css' },
       ]
     }
   },
@@ -25,6 +26,7 @@ export default defineNuxtConfig({
       storageUrl: 'http://localhost/storage',
     }
   },
+  ssr: false,
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   css: ['~/assets/css/main.css'],
@@ -34,9 +36,6 @@ export default defineNuxtConfig({
     ],
     build: {
       minify: 'esbuild',
-      rollupOptions: {
-        maxParallelFileOps: 2,
-      },
     },
   }
 })

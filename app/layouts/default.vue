@@ -2,7 +2,6 @@
 
 import Header from "~/components/Header.vue";
 import Footer from "~/components/Footer.vue";
-import "@fortawesome/fontawesome-free/css/all.min.css"
 
 useSeoMeta({
   title: 'EzzyRide Uganda | URA Tax Calculator',

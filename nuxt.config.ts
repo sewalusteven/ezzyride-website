@@ -30,7 +30,13 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   vite: {
     plugins: [
-        tailwindcss()
-    ]
+      tailwindcss(),
+    ],
+    build: {
+      minify: 'esbuild',
+      rollupOptions: {
+        maxParallelFileOps: 2,
+      },
+    },
   }
 })

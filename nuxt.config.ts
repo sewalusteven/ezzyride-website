@@ -48,6 +48,19 @@ export default defineNuxtConfig({
     ],
     build: {
       minify: 'esbuild',
+      chunkSizeWarningLimit: 800,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-charts':    ['apexcharts', 'vue3-apexcharts'],
+            'vendor-ui':        ['@headlessui/vue'],
+            'vendor-http':      ['axios'],
+            'vendor-notify':    ['notiflix'],
+          }
+        }
+      }
     },
   }
 })
+
+

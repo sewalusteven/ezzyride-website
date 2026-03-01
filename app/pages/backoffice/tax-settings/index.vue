@@ -141,14 +141,14 @@ const fmtUGX = (n: number) =>
     </div>
 
     <!-- Loading skeleton -->
-    <div v-if="loading" class="grid grid-cols-3 gap-5 animate-pulse">
+    <div v-if="loading" class="grid grid-cols-1 lg:grid-cols-3 gap-5 animate-pulse">
       <div class="col-span-2 space-y-4">
         <div v-for="n in 5" :key="n" class="h-32 bg-gray-100 rounded-lg"></div>
       </div>
       <div class="h-64 bg-gray-100 rounded-lg"></div>
     </div>
 
-    <div v-else class="grid grid-cols-3 gap-5">
+    <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
       <!-- ── LEFT: Form ─────────────────────────────────────────────────── -->
       <div class="col-span-2 space-y-4">
@@ -201,7 +201,7 @@ const fmtUGX = (n: number) =>
               <p class="text-xs text-gray-400">All applied as a percentage of CIF_UGX</p>
             </div>
           </div>
-          <div class="p-5 grid grid-cols-2 gap-x-5 gap-y-4">
+          <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Import Duty</label>
               <p class="text-xs text-gray-400 mb-2">Applied on CIF_UGX</p>
@@ -291,7 +291,7 @@ const fmtUGX = (n: number) =>
               </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <!-- Partial band -->
               <div class="border border-yellow-200 bg-yellow-50/60 rounded-md p-4 space-y-3">
                 <p class="text-xs font-semibold text-yellow-700 uppercase tracking-wide flex items-center gap-1.5">
@@ -389,7 +389,7 @@ const fmtUGX = (n: number) =>
               <p class="text-xs text-gray-400">Flat UGX amounts — not percentage-based</p>
             </div>
           </div>
-          <div class="p-5 grid grid-cols-3 gap-4">
+          <div class="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1.5">Form Fees</label>
               <div class="flex rounded-md border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-primary focus-within:border-primary">

@@ -190,7 +190,7 @@ const pages = computed(() => {
         <h2 class="text-2xl font-semibold text-gray-900">Valuations</h2>
         <p class="text-sm text-gray-500 mt-0.5">URA vehicle valuation database</p>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 flex-wrap">
         <button
           class="flex items-center cursor-pointer gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors"
           @click="showImport = true"
@@ -513,7 +513,7 @@ const pages = computed(() => {
             </div>
 
             <!-- Row: HSC + Origin -->
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">HSC Code</label>
                 <input
@@ -536,7 +536,7 @@ const pages = computed(() => {
             </div>
 
             <!-- Row: CC + CIF -->
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">Engine CC</label>
                 <input

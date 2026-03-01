@@ -8,7 +8,7 @@ const id = route.params.id as string
 // ── State ──────────────────────────────────────────────────────────────────
 const vehicle   = ref<any>(null)
 const loading   = ref(true)
-const tab       = ref<'details' | 'importation' | 'costs' | 'transactions' | 'client' | 'documents'>('details')
+const tab       = ref<'details' | 'importation' | 'costs' | 'transactions' | 'client' | 'documents' | 'enquiries'>('details')
 
 // Sub-form state
 const saving     = ref(false)
@@ -19,9 +19,27 @@ const formSuccess= ref('')
 const importForm = ref<Record<string, any>>({})
 
 // Cost add form
-const costForm = ref({ category: 'other', description: '', amount: '', currency: 'ugx', exchange_rate_used: '', amount_ugx: '', incurred_at: '' })
+const costForm = ref({ category: 'other', description: '', amount: '', currency: 'ugx', exchange_rate_used: '1', amount_ugx: '', incurred_at: '' })
 const addingCost = ref(false)
 const costError  = ref('')
+
+// Auto-set rate to 1 when switching to UGX; clear it when switching to USD
+watch(() => costForm.value.currency, (val) => {
+  costForm.value.exchange_rate_used = val === 'ugx' ? '1' : ''
+  const amt  = parseFloat(costForm.value.amount) || 0
+  const rate = val === 'ugx' ? 1 : 0
+  costForm.value.amount_ugx = amt > 0 && rate > 0 ? String(Math.round(amt * rate)) : ''
+})
+
+// Auto-calculate amount_ugx whenever amount or rate changes
+watch(
+  () => [costForm.value.amount, costForm.value.exchange_rate_used],
+  () => {
+    const amt  = parseFloat(costForm.value.amount) || 0
+    const rate = parseFloat(costForm.value.exchange_rate_used) || 0
+    costForm.value.amount_ugx = amt > 0 && rate > 0 ? String(Math.round(amt * rate)) : ''
+  }
+)
 
 // Payment form
 const paymentForm = ref({ amount: '', payment_method: 'cash', reference_number: '', notes: '', paid_at: new Date().toISOString().split('T')[0] })
@@ -103,6 +121,7 @@ onMounted(async () => {
   await fetchVehicle()
   fetchSources()
   fetchCustomers()
+  fetchVehicleInquiries()
 })
 
 // ── Save importation ───────────────────────────────────────────────────────
@@ -123,14 +142,8 @@ const saveImportation = async () => {
 const addCost = async () => {
   addingCost.value = true; costError.value = ''
   try {
-    // Auto-calculate UGX if USD
-    if (costForm.value.currency === 'usd' && costForm.value.exchange_rate_used) {
-      costForm.value.amount_ugx = String(Number(costForm.value.amount) * Number(costForm.value.exchange_rate_used))
-    } else {
-      costForm.value.amount_ugx = costForm.value.amount
-    }
     await $api.post(`/v1/vehicles/${id}/costs`, costForm.value)
-    costForm.value = { category: 'other', description: '', amount: '', currency: 'ugx', exchange_rate_used: '', amount_ugx: '', incurred_at: '' }
+    costForm.value = { category: 'other', description: '', amount: '', currency: 'ugx', exchange_rate_used: '1', amount_ugx: '', incurred_at: '' }
     await fetchVehicle()
   } catch (e: any) {
     const errs = e.response?.data?.data
@@ -158,6 +171,21 @@ const saveSale = async () => {
     saleError.value = e.response?.data?.message ?? 'Failed'
   } finally {
     savingSale.value = false
+  }
+}
+
+const downloadVehicleReceipt = async (payment: any) => {
+  try {
+    const response = await $api.get(`/v1/vehicles/${id}/sale/payments/${payment.id}/receipt`, { responseType: 'blob' })
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `receipt-${payment.receipt_number}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    formError.value = 'Failed to download receipt'
   }
 }
 
@@ -268,7 +296,45 @@ const importSteps = [
 
 const currentStepIdx = computed(() => importSteps.findIndex(s => s.key === importForm.value.status))
 
-const tabKeys = ['details', 'importation', 'costs', 'transactions', 'client', 'documents'] as const
+// ── Enquiries tab ──────────────────────────────────────────────────────────
+interface Inquiry { id: number; name: string; email: string|null; phone: string|null; subject: string|null; message: string; status: string; created_at: string }
+const vehicleInquiries   = ref<Inquiry[]>([])
+const loadingInquiries   = ref(false)
+const selectedInquiry    = ref<Inquiry|null>(null)
+const updatingInquiry    = ref(false)
+
+const fetchVehicleInquiries = async () => {
+  if (!vehicle.value?.reference) return
+  loadingInquiries.value = true
+  try {
+    const { data } = await $api.get('/v1/inquiries', { params: { search: vehicle.value.reference, per_page: 50 } })
+    vehicleInquiries.value = data.data
+  } finally {
+    loadingInquiries.value = false
+  }
+}
+
+const updateInquiryStatus = async (status: string) => {
+  if (!selectedInquiry.value) return
+  updatingInquiry.value = true
+  try {
+    const { data } = await $api.patch(`/v1/inquiries/${selectedInquiry.value.id}`, { status })
+    selectedInquiry.value = data.data
+    const idx = vehicleInquiries.value.findIndex(i => i.id === selectedInquiry.value!.id)
+    if (idx !== -1) vehicleInquiries.value[idx] = data.data
+  } finally {
+    updatingInquiry.value = false
+  }
+}
+
+const deleteInquiry = async (inquiryId: number) => {
+  if (!confirm('Delete this inquiry?')) return
+  await $api.delete(`/v1/inquiries/${inquiryId}`)
+  vehicleInquiries.value = vehicleInquiries.value.filter(i => i.id !== inquiryId)
+  if (selectedInquiry.value?.id === inquiryId) selectedInquiry.value = null
+}
+
+const tabKeys = ['details', 'importation', 'costs', 'transactions', 'client', 'documents', 'enquiries'] as const
 const tabIndex = computed(() => tabKeys.indexOf(tab.value))
 
 // ── Confirm dialog ─────────────────────────────────────────────────────────
@@ -333,6 +399,7 @@ const cancelConfirm = () => { confirmState.value.show = false }
             { key: 'transactions', label: 'Transactions', icon: 'fa-money-bill-wave' },
             { key: 'client', label: 'Client', icon: 'fa-user' },
             { key: 'documents', label: 'Documents', icon: 'fa-file' },
+            { key: 'enquiries', label: 'Enquiries', icon: 'fa-envelope' },
           ]" :key="t.key" as="template" v-slot="{ selected }">
             <button
               class="cursor-pointer flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
@@ -347,12 +414,12 @@ const cancelConfirm = () => { confirmState.value.show = false }
 
       <!-- ══ DETAILS TAB ═══════════════════════════════════════════════ -->
       <TabPanel>
-      <div class="grid grid-cols-3 gap-5">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div class="col-span-2 space-y-5">
           <!-- Images -->
           <div class="bg-white rounded-lg border border-gray-200 p-5">
             <h3 class="font-semibold text-gray-900 text-sm mb-4">Images</h3>
-            <div v-if="vehicle.images?.length" class="grid grid-cols-4 gap-3">
+            <div v-if="vehicle.images?.length" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div v-for="img in vehicle.images" :key="img.id" class="aspect-square rounded-md overflow-hidden bg-gray-100 relative">
                 <img :src="storageUrl(img.path)" class="w-full h-full object-cover" :alt="vehicle.model">
                 <span v-if="img.isPrimary" class="absolute top-1 left-1 text-[10px] bg-primary text-white px-1.5 py-0.5 rounded font-medium">Primary</span>
@@ -364,7 +431,7 @@ const cancelConfirm = () => { confirmState.value.show = false }
           <!-- Specs grid -->
           <div class="bg-white rounded-lg border border-gray-200 p-5">
             <h3 class="font-semibold text-gray-900 text-sm mb-4">Specifications</h3>
-            <div class="grid grid-cols-2 gap-y-3 gap-x-6 text-sm">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 text-sm">
               <div class="flex justify-between border-b border-gray-50 pb-2"><span class="text-gray-500">Brand</span><span class="font-medium text-gray-900">{{ vehicle.brand?.name ?? '—' }}</span></div>
               <div class="flex justify-between border-b border-gray-50 pb-2"><span class="text-gray-500">Model</span><span class="font-medium text-gray-900">{{ vehicle.model }}</span></div>
               <div class="flex justify-between border-b border-gray-50 pb-2"><span class="text-gray-500">Year</span><span class="font-medium text-gray-900">{{ vehicle.year }}</span></div>
@@ -383,7 +450,7 @@ const cancelConfirm = () => { confirmState.value.show = false }
           <!-- Dynamic attributes -->
           <div v-if="vehicle.attributes?.length" class="bg-white rounded-lg border border-gray-200 p-5">
             <h3 class="font-semibold text-gray-900 text-sm mb-4">Additional Attributes</h3>
-            <div class="grid grid-cols-2 gap-y-3 gap-x-6 text-sm">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 text-sm">
               <div v-for="va in vehicle.attributes" :key="va.id" class="flex justify-between border-b border-gray-50 pb-2">
                 <span class="text-gray-500">{{ va.attributeName }}</span>
                 <span class="font-medium text-gray-900">{{ va.value }}{{ va.unit ? ' ' + va.unit : '' }}</span>
@@ -460,7 +527,7 @@ const cancelConfirm = () => { confirmState.value.show = false }
 
       <!-- ══ IMPORTATION TAB ═══════════════════════════════════════════ -->
       <TabPanel>
-      <div class="grid grid-cols-3 gap-5">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div class="col-span-2 space-y-5">
           <!-- Import timeline -->
           <div class="bg-white rounded-lg border border-gray-200 p-5">
@@ -485,7 +552,7 @@ const cancelConfirm = () => { confirmState.value.show = false }
             <div class="px-5 py-4 border-b border-gray-100">
               <h3 class="font-semibold text-gray-900 text-sm">Importation Details</h3>
             </div>
-            <div class="p-5 grid grid-cols-2 gap-4">
+            <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">Source Platform</label>
                 <select v-model="importForm.source_platform_id" class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
@@ -544,14 +611,14 @@ const cancelConfirm = () => { confirmState.value.show = false }
 
       <!-- ══ COSTS TAB ════════════════════════════════════════════════ -->
       <TabPanel>
-      <div class="grid grid-cols-3 gap-5">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div class="col-span-2 space-y-5">
           <!-- Add cost form -->
           <div class="bg-white rounded-lg border border-gray-200">
             <div class="px-5 py-4 border-b border-gray-100"><h3 class="font-semibold text-gray-900 text-sm">Add Cost Entry</h3></div>
             <div class="p-5 space-y-4">
               <div v-if="costError" class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">{{ costError }}</div>
-              <div class="grid grid-cols-2 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
                   <select v-model="costForm.category" class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
@@ -577,18 +644,27 @@ const cancelConfirm = () => { confirmState.value.show = false }
                   <label class="block text-sm font-medium text-gray-700 mb-1.5">Amount</label>
                   <div class="flex rounded-md border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-primary focus-within:border-primary">
                     <span class="px-3 py-2.5 bg-gray-50 border-r border-gray-300 text-xs text-gray-500 flex items-center font-medium uppercase">{{ costForm.currency }}</span>
-                    <input v-model="costForm.amount" type="number" min="0" class="flex-1 px-3 py-2.5 text-sm border-0 outline-none bg-white [&::-webkit-inner-spin-button]:appearance-none">
+                    <input v-model="costForm.amount" type="number" min="0" step="0.01" class="flex-1 px-3 py-2.5 text-sm border-0 outline-none bg-white [&::-webkit-inner-spin-button]:appearance-none">
                   </div>
                 </div>
-                <div v-if="costForm.currency === 'usd'">
+                <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1.5">Exchange Rate (UGX/USD)</label>
-                  <input v-model="costForm.exchange_rate_used" type="number" placeholder="e.g. 3700" class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none [&::-webkit-inner-spin-button]:appearance-none">
+                  <input
+                    v-model="costForm.exchange_rate_used"
+                    type="number"
+                    placeholder="e.g. 3700"
+                    step="0.01"
+                    :disabled="costForm.currency === 'ugx'"
+                    class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none [&::-webkit-inner-spin-button]:appearance-none disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  >
                 </div>
-                <div v-if="costForm.currency === 'usd'">
-                  <label class="block text-sm font-medium text-gray-700 mb-1.5">Amount (UGX equivalent)</label>
-                  <div class="flex rounded-md border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-primary focus-within:border-primary">
-                    <span class="px-3 py-2.5 bg-gray-50 border-r border-gray-300 text-xs text-gray-500 flex items-center">UGX</span>
-                    <input v-model="costForm.amount_ugx" type="number" min="0" class="flex-1 px-3 py-2.5 text-sm border-0 outline-none bg-white [&::-webkit-inner-spin-button]:appearance-none">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1.5">Amount (UGX)</label>
+                  <div class="flex rounded-md border border-gray-200 bg-gray-50 overflow-hidden">
+                    <span class="px-3 py-2.5 border-r border-gray-200 text-xs text-gray-500 flex items-center">UGX</span>
+                    <div class="flex-1 px-3 py-2.5 text-sm text-gray-700">
+                      {{ costForm.amount_ugx ? Number(costForm.amount_ugx).toLocaleString() : '—' }}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -608,7 +684,8 @@ const cancelConfirm = () => { confirmState.value.show = false }
               <span class="text-sm font-semibold text-gray-900">Total: {{ fmtUGX(totalCosts) }}</span>
             </div>
             <div v-if="!vehicle.costs?.length" class="py-10 text-center text-sm text-gray-400">No costs recorded yet</div>
-            <table v-else class="w-full text-sm">
+            <div v-else class="overflow-x-auto">
+            <table class="w-full text-sm">
               <thead class="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
@@ -637,6 +714,7 @@ const cancelConfirm = () => { confirmState.value.show = false }
                 </tr>
               </tfoot>
             </table>
+            </div>
           </div>
         </div>
         <div>
@@ -659,7 +737,7 @@ const cancelConfirm = () => { confirmState.value.show = false }
 
       <!-- ══ TRANSACTIONS TAB ══════════════════════════════════════════ -->
       <TabPanel>
-      <div class="grid grid-cols-3 gap-5">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div class="col-span-2 space-y-5">
           <!-- Add payment -->
           <div class="bg-white rounded-lg border border-gray-200">
@@ -673,7 +751,7 @@ const cancelConfirm = () => { confirmState.value.show = false }
                   No email on file for this customer — receipt will not be sent.
                   <NuxtLink :to="`/backoffice/customers/${vehicle.sale.customer_id}`" class="underline ml-1 font-medium">Add email</NuxtLink>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Amount (UGX)</label>
                     <div class="flex rounded-md border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-primary focus-within:border-primary">
@@ -718,13 +796,15 @@ const cancelConfirm = () => { confirmState.value.show = false }
           <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div class="px-5 py-4 border-b border-gray-100"><h3 class="font-semibold text-gray-900 text-sm">Payment History</h3></div>
             <div v-if="!vehicle.payments?.length" class="py-10 text-center text-sm text-gray-400">No payments recorded</div>
-            <table v-else class="w-full text-sm">
+            <div v-else class="overflow-x-auto">
+            <table class="w-full text-sm">
               <thead class="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
                   <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Receipt #</th>
                   <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Method</th>
                   <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Amount</th>
+                  <th class="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100">
@@ -733,9 +813,19 @@ const cancelConfirm = () => { confirmState.value.show = false }
                   <td class="px-4 py-3 font-mono text-xs text-gray-700">{{ p.receipt_number }}</td>
                   <td class="px-4 py-3 capitalize text-gray-600">{{ p.payment_method.replace('_',' ') }}</td>
                   <td class="px-4 py-3 text-right font-semibold text-gray-900">{{ fmtUGX(p.amount) }}</td>
+                  <td class="px-4 py-3 text-right">
+                    <button
+                      class="p-1.5 text-gray-400 hover:text-secondary hover:bg-blue-50 rounded-md transition-colors"
+                      title="Download receipt PDF"
+                      @click="downloadVehicleReceipt(p)"
+                    >
+                      <i class="fa-solid fa-download text-xs"></i>
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>
+            </div>
           </div>
         </div>
         <!-- Balance sidebar -->
@@ -756,7 +846,7 @@ const cancelConfirm = () => { confirmState.value.show = false }
 
       <!-- ══ CLIENT TAB ════════════════════════════════════════════════ -->
       <TabPanel>
-      <div class="grid grid-cols-3 gap-5">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div class="col-span-2 space-y-5">
           <!-- Sale info -->
           <div class="bg-white rounded-lg border border-gray-200">
@@ -778,7 +868,7 @@ const cancelConfirm = () => { confirmState.value.show = false }
                 <div v-else class="border border-gray-200 rounded-md p-4 space-y-3 bg-gray-50">
                   <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide">New Customer</p>
                   <div v-if="customerError" class="text-xs text-red-600">{{ customerError }}</div>
-                  <div class="grid grid-cols-2 gap-3">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label class="block text-xs font-medium text-gray-700 mb-1">Full Name <span class="text-red-500">*</span></label>
                       <input v-model="customerForm.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
@@ -802,7 +892,7 @@ const cancelConfirm = () => { confirmState.value.show = false }
                   </button>
                 </div>
               </div>
-              <div class="grid grid-cols-2 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1.5">Agreed Price (UGX)</label>
                   <div class="flex rounded-md border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-primary focus-within:border-primary">
@@ -838,7 +928,7 @@ const cancelConfirm = () => { confirmState.value.show = false }
           <!-- Customer details display -->
           <div v-if="vehicle.sale?.customer" class="bg-white rounded-lg border border-gray-200 p-5">
             <h3 class="font-semibold text-gray-900 text-sm mb-4">Customer Details</h3>
-            <div class="grid grid-cols-2 gap-y-3 gap-x-6 text-sm">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 text-sm">
               <div class="flex justify-between border-b border-gray-50 pb-2"><span class="text-gray-500">Name</span><span class="font-medium">{{ vehicle.sale.customer.name }}</span></div>
               <div class="flex justify-between border-b border-gray-50 pb-2"><span class="text-gray-500">Phone</span><span class="font-medium">{{ vehicle.sale.customer.phone }}</span></div>
               <div class="flex justify-between border-b border-gray-50 pb-2"><span class="text-gray-500">Email</span><span class="font-medium">{{ vehicle.sale.customer.email ?? '—' }}</span></div>
@@ -858,14 +948,14 @@ const cancelConfirm = () => { confirmState.value.show = false }
 
       <!-- ══ DOCUMENTS TAB ═════════════════════════════════════════════ -->
       <TabPanel>
-      <div class="grid grid-cols-3 gap-5">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div class="col-span-2 space-y-5">
           <!-- Upload form -->
           <div class="bg-white rounded-lg border border-gray-200">
             <div class="px-5 py-4 border-b border-gray-100"><h3 class="font-semibold text-gray-900 text-sm">Upload Document</h3></div>
             <div class="p-5 space-y-4">
               <div v-if="docError" class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">{{ docError }}</div>
-              <div class="grid grid-cols-2 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1.5">Document Name</label>
                   <input v-model="docForm.name" type="text" class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="e.g. Log Book">
@@ -930,6 +1020,136 @@ const cancelConfirm = () => { confirmState.value.show = false }
               <p><span class="font-medium text-gray-700">Insurance</span> — cover note</p>
               <p><span class="font-medium text-gray-700">Title</span> — ownership document</p>
             </div>
+          </div>
+        </div>
+      </div>
+      </TabPanel>
+
+      <!-- ══ ENQUIRIES TAB ══════════════════════════════════════════════ -->
+      <TabPanel>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <!-- Enquiries list -->
+        <div class="col-span-2 space-y-3">
+          <div v-if="loadingInquiries" class="py-16 flex items-center justify-center">
+            <i class="fa-solid fa-spinner fa-spin text-2xl text-gray-300"></i>
+          </div>
+          <template v-else-if="vehicleInquiries.length">
+            <div
+              v-for="inq in vehicleInquiries"
+              :key="inq.id"
+              @click="selectedInquiry = inq"
+              class="bg-white rounded-lg border border-gray-200 p-4 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
+              :class="{ 'border-primary/60 ring-1 ring-primary/20': selectedInquiry?.id === inq.id }"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <span class="text-primary text-sm font-semibold">{{ inq.name.charAt(0).toUpperCase() }}</span>
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold text-gray-900 truncate">{{ inq.name }}</p>
+                    <p class="text-xs text-gray-400 truncate">{{ inq.subject ?? 'No subject' }}</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                    :class="{
+                      'bg-yellow-100 text-yellow-700': inq.status === 'unread',
+                      'bg-blue-100 text-blue-700': inq.status === 'read',
+                      'bg-green-100 text-green-700': inq.status === 'resolved',
+                    }"
+                  >{{ inq.status }}</span>
+                  <span class="text-xs text-gray-400">{{ new Date(inq.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short' }) }}</span>
+                </div>
+              </div>
+              <p class="mt-2 text-xs text-gray-500 line-clamp-2 ml-12">{{ inq.message }}</p>
+            </div>
+          </template>
+          <div v-else class="bg-white rounded-lg border border-gray-200 py-16 text-center">
+            <i class="fa-solid fa-envelope text-3xl text-gray-200 mb-3"></i>
+            <p class="text-sm text-gray-400">No enquiries for this vehicle yet</p>
+          </div>
+        </div>
+
+        <!-- Detail side panel -->
+        <div>
+          <div v-if="selectedInquiry" class="bg-white rounded-lg border border-gray-200 overflow-hidden sticky top-4">
+            <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <p class="text-sm font-semibold text-gray-900">Enquiry Detail</p>
+              <button @click="selectedInquiry = null" class="cursor-pointer p-1 text-gray-400 hover:text-gray-600 rounded-md">
+                <i class="fa-solid fa-xmark text-sm"></i>
+              </button>
+            </div>
+            <div class="p-4 space-y-3 text-sm">
+              <div>
+                <p class="text-xs text-gray-400 mb-0.5">From</p>
+                <p class="font-medium text-gray-900">{{ selectedInquiry.name }}</p>
+              </div>
+              <div v-if="selectedInquiry.email">
+                <p class="text-xs text-gray-400 mb-0.5">Email</p>
+                <p class="text-gray-700 break-all">{{ selectedInquiry.email }}</p>
+              </div>
+              <div v-if="selectedInquiry.phone">
+                <p class="text-xs text-gray-400 mb-0.5">Phone</p>
+                <p class="text-gray-700">{{ selectedInquiry.phone }}</p>
+              </div>
+              <div v-if="selectedInquiry.subject">
+                <p class="text-xs text-gray-400 mb-0.5">Subject</p>
+                <p class="text-gray-700">{{ selectedInquiry.subject }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-400 mb-0.5">Message</p>
+                <p class="text-gray-700 whitespace-pre-line text-xs leading-relaxed">{{ selectedInquiry.message }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-400 mb-0.5">Received</p>
+                <p class="text-gray-700">{{ new Date(selectedInquiry.created_at).toLocaleString('en-GB', { dateStyle:'medium', timeStyle:'short' }) }}</p>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="px-4 pb-4 space-y-2">
+              <div class="flex gap-2">
+                <a
+                  v-if="selectedInquiry.email"
+                  :href="`mailto:${selectedInquiry.email}?subject=Re: ${encodeURIComponent(selectedInquiry.subject ?? '')}`"
+                  class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 rounded-md text-xs font-medium hover:bg-blue-100 transition-colors"
+                >
+                  <i class="fa-solid fa-envelope text-xs"></i> Email
+                </a>
+                <a
+                  v-if="selectedInquiry.phone"
+                  :href="`https://wa.me/${selectedInquiry.phone.replace(/\D/g,'')}`"
+                  target="_blank"
+                  class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-green-50 text-green-700 rounded-md text-xs font-medium hover:bg-green-100 transition-colors"
+                >
+                  <i class="fa-brands fa-whatsapp text-xs"></i> WhatsApp
+                </a>
+              </div>
+              <button
+                v-if="selectedInquiry.status !== 'resolved'"
+                :disabled="updatingInquiry"
+                @click="updateInquiryStatus('resolved')"
+                class="cursor-pointer w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-md text-xs font-medium hover:bg-green-700 disabled:opacity-60 transition-colors"
+              >
+                <i v-if="updatingInquiry" class="fa-solid fa-spinner fa-spin"></i>
+                <i v-else class="fa-solid fa-check text-xs"></i>
+                Mark Resolved
+              </button>
+              <button
+                :disabled="updatingInquiry"
+                @click="deleteInquiry(selectedInquiry.id)"
+                class="cursor-pointer w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 rounded-md text-xs font-medium hover:bg-red-100 disabled:opacity-60 transition-colors"
+              >
+                <i class="fa-solid fa-trash text-xs"></i> Delete
+              </button>
+            </div>
+          </div>
+
+          <div v-else class="bg-white rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-400">
+            <i class="fa-solid fa-hand-pointer text-2xl text-gray-200 mb-2"></i>
+            <p>Select an enquiry to view details</p>
           </div>
         </div>
       </div>

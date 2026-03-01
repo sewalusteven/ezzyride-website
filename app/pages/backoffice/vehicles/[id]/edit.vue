@@ -219,7 +219,7 @@ const keepCount = computed(() =>
       <p class="text-sm">Loading vehicle…</p>
     </div>
 
-    <div v-else class="grid grid-cols-3 gap-5">
+    <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-5">
       <div class="col-span-2 space-y-5">
 
         <!-- 1. Basic Info -->
@@ -233,7 +233,7 @@ const keepCount = computed(() =>
               <p class="text-xs text-gray-400">Identity and core details</p>
             </div>
           </div>
-          <div class="p-5 grid grid-cols-2 gap-4">
+          <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1.5">Brand <span class="text-red-500">*</span></label>
               <select v-model="form.brand_id" class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
@@ -278,7 +278,7 @@ const keepCount = computed(() =>
               <p class="text-xs text-gray-400">Mechanical and performance details</p>
             </div>
           </div>
-          <div class="p-5 grid grid-cols-2 gap-4">
+          <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1.5">Transmission <span class="text-red-500">*</span></label>
               <select v-model="form.transmission" class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
@@ -337,7 +337,7 @@ const keepCount = computed(() =>
               <p class="text-xs text-gray-400">Configurable specs for this vehicle</p>
             </div>
           </div>
-          <div class="p-5 grid grid-cols-2 gap-4">
+          <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div v-for="attr in attributes" :key="attr.id">
               <label class="block text-sm font-medium text-gray-700 mb-1.5">
                 {{ attr.name }}
@@ -425,7 +425,7 @@ const keepCount = computed(() =>
             <!-- Existing images -->
             <div v-if="existingImages.length">
               <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Current Images</p>
-              <div class="grid grid-cols-4 gap-3">
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div
                   v-for="img in existingImages" :key="img.id"
                   class="relative group rounded-md overflow-hidden aspect-square bg-gray-100 cursor-pointer"
@@ -460,7 +460,7 @@ const keepCount = computed(() =>
             <!-- New images -->
             <div v-if="newImagePreviews.length">
               <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">New Images (to be uploaded)</p>
-              <div class="grid grid-cols-4 gap-3">
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div v-for="(src, i) in newImagePreviews" :key="i" class="relative group rounded-md overflow-hidden aspect-square bg-gray-100">
                   <img :src="src" class="w-full h-full object-cover">
                   <button type="button" class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity" @click="removeNewImage(i)">

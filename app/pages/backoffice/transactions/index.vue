@@ -83,32 +83,33 @@ onMounted(() => fetchTransactions())
       <p class="text-sm text-gray-500 mt-0.5">All payment records across all vehicles</p>
     </div>
 
-    <!-- Filter bar -->
-    <div class="flex items-center gap-3 flex-wrap">
-      <div class="relative flex-1 min-w-[220px]">
-        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-        <input v-model="search" type="text" placeholder="Search by receipt #, customer, vehicle ref…"
-          class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none"
-          @input="onSearch">
+    <div class="p-4 flex flex-col gap-2 bg-white rounded shadow">
+      <!-- Filter bar -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="relative flex-1 min-w-[220px]">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+          <input v-model="search" type="text" placeholder="Search by receipt #, customer, vehicle ref…"
+                 class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                 @input="onSearch">
+        </div>
+        <select v-model="filterMethod" class="cursor-pointer px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
+          <option value="">All Methods</option>
+          <option value="cash">Cash</option>
+          <option value="bank_transfer">Bank Transfer</option>
+          <option value="mobile_money">Mobile Money</option>
+          <option value="cheque">Cheque</option>
+          <option value="other">Other</option>
+        </select>
+        <input v-model="dateFrom" type="date" title="From date" class="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
+        <input v-model="dateTo"   type="date" title="To date"   class="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
+        <span class="text-xs text-gray-400 ml-auto whitespace-nowrap">{{ meta.total }} payment{{ meta.total !== 1 ? 's' : '' }}</span>
       </div>
-      <select v-model="filterMethod" class="cursor-pointer px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
-        <option value="">All Methods</option>
-        <option value="cash">Cash</option>
-        <option value="bank_transfer">Bank Transfer</option>
-        <option value="mobile_money">Mobile Money</option>
-        <option value="cheque">Cheque</option>
-        <option value="other">Other</option>
-      </select>
-      <input v-model="dateFrom" type="date" title="From date" class="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
-      <input v-model="dateTo"   type="date" title="To date"   class="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
-      <span class="text-xs text-gray-400 ml-auto whitespace-nowrap">{{ meta.total }} payment{{ meta.total !== 1 ? 's' : '' }}</span>
-    </div>
 
-    <!-- Table -->
-    <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="bg-gray-50 border-b border-gray-200">
+      <!-- Table -->
+      <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
             <tr>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Date</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Receipt #</th>
@@ -117,8 +118,8 @@ onMounted(() => fetchTransactions())
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Method</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Amount</th>
             </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
+            </thead>
+            <tbody class="divide-y divide-gray-100">
             <!-- Skeleton -->
             <tr v-if="loading" v-for="n in 5" :key="n" class="animate-pulse">
               <td class="px-4 py-3"><div class="h-4 w-24 bg-gray-200 rounded"></div></td>
@@ -168,19 +169,20 @@ onMounted(() => fetchTransactions())
               </td>
               <td class="px-4 py-3 text-gray-900 whitespace-nowrap font-medium">{{ fmtUGX(t.amount) }}</td>
             </tr>
-          </tbody>
-        </table>
-      </div>
-      <!-- Pagination -->
-      <div v-if="meta.last_page > 1" class="px-4 py-3 border-t border-gray-100 flex items-center justify-between gap-3">
-        <p class="text-xs text-gray-500">Showing {{ ((meta.current_page - 1) * meta.per_page) + 1 }}–{{ Math.min(meta.current_page * meta.per_page, meta.total) }} of {{ meta.total }}</p>
-        <div class="flex items-center gap-1">
-          <button class="cursor-pointer px-2.5 py-1.5 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-40" :disabled="meta.current_page === 1" @click="fetchTransactions(meta.current_page - 1)">&lsaquo;</button>
-          <template v-for="p in pages" :key="p">
-            <span v-if="p === '...'" class="px-2 text-gray-400 text-sm">…</span>
-            <button v-else class="cursor-pointer px-2.5 py-1.5 text-sm rounded-md border transition-colors" :class="p === meta.current_page ? 'border-primary bg-primary text-white' : 'border-gray-300 text-gray-600 hover:bg-gray-50'" @click="fetchTransactions(p as number)">{{ p }}</button>
-          </template>
-          <button class="cursor-pointer px-2.5 py-1.5 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-40" :disabled="meta.current_page === meta.last_page" @click="fetchTransactions(meta.current_page + 1)">&rsaquo;</button>
+            </tbody>
+          </table>
+        </div>
+        <!-- Pagination -->
+        <div v-if="meta.last_page > 1" class="px-4 py-3 border-t border-gray-100 flex items-center justify-between gap-3">
+          <p class="text-xs text-gray-500">Showing {{ ((meta.current_page - 1) * meta.per_page) + 1 }}–{{ Math.min(meta.current_page * meta.per_page, meta.total) }} of {{ meta.total }}</p>
+          <div class="flex items-center gap-1">
+            <button class="cursor-pointer px-2.5 py-1.5 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-40" :disabled="meta.current_page === 1" @click="fetchTransactions(meta.current_page - 1)">&lsaquo;</button>
+            <template v-for="p in pages" :key="p">
+              <span v-if="p === '...'" class="px-2 text-gray-400 text-sm">…</span>
+              <button v-else class="cursor-pointer px-2.5 py-1.5 text-sm rounded-md border transition-colors" :class="p === meta.current_page ? 'border-primary bg-primary text-white' : 'border-gray-300 text-gray-600 hover:bg-gray-50'" @click="fetchTransactions(p as number)">{{ p }}</button>
+            </template>
+            <button class="cursor-pointer px-2.5 py-1.5 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-40" :disabled="meta.current_page === meta.last_page" @click="fetchTransactions(meta.current_page + 1)">&rsaquo;</button>
+          </div>
         </div>
       </div>
     </div>

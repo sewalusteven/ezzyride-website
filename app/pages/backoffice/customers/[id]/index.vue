@@ -221,7 +221,7 @@ const confirmDelete = async () => {
       </div>
 
       <!-- Two-column body -->
-      <div class="grid grid-cols-3 gap-5 items-start">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
 
         <!-- Left: Tabs (2/3) -->
         <div class="col-span-2">
@@ -480,7 +480,7 @@ const confirmDelete = async () => {
               </div>
               <div class="p-6 space-y-4">
                 <div v-if="saveError" class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">{{ saveError }}</div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Full Name <span class="text-red-500">*</span></label>
                     <input v-model="editForm.name" type="text"

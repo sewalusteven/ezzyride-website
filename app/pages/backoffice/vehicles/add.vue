@@ -154,7 +154,7 @@ const attrByIdx = (id: number) => form.value.vehicle_attributes.find(a => a.attr
       <p class="text-sm">Loading form…</p>
     </div>
 
-    <div v-else class="grid grid-cols-3 gap-5">
+    <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-5">
       <div class="col-span-2 space-y-5">
 
         <!-- 1. Basic Info -->
@@ -168,7 +168,7 @@ const attrByIdx = (id: number) => form.value.vehicle_attributes.find(a => a.attr
               <p class="text-xs text-gray-400">Identity and core details</p>
             </div>
           </div>
-          <div class="p-5 grid grid-cols-2 gap-4">
+          <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1.5">Brand <span class="text-red-500">*</span></label>
               <select v-model="form.brand_id" class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
@@ -213,7 +213,7 @@ const attrByIdx = (id: number) => form.value.vehicle_attributes.find(a => a.attr
               <p class="text-xs text-gray-400">Mechanical and performance details</p>
             </div>
           </div>
-          <div class="p-5 grid grid-cols-2 gap-4">
+          <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1.5">Transmission <span class="text-red-500">*</span></label>
               <select v-model="form.transmission" class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
@@ -272,7 +272,7 @@ const attrByIdx = (id: number) => form.value.vehicle_attributes.find(a => a.attr
               <p class="text-xs text-gray-400">Configurable specs for this vehicle</p>
             </div>
           </div>
-          <div class="p-5 grid grid-cols-2 gap-4">
+          <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div v-for="attr in attributes" :key="attr.id">
               <label class="block text-sm font-medium text-gray-700 mb-1.5">
                 {{ attr.name }}
@@ -350,7 +350,7 @@ const attrByIdx = (id: number) => form.value.vehicle_attributes.find(a => a.attr
             <h3 class="font-semibold text-gray-900 text-sm">Images</h3>
           </div>
           <div class="p-5">
-            <div v-if="imagePreviews.length" class="grid grid-cols-4 gap-3 mb-4">
+            <div v-if="imagePreviews.length" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
               <div v-for="(src, i) in imagePreviews" :key="i" class="relative group rounded-md overflow-hidden aspect-square bg-gray-100">
                 <img :src="src" class="w-full h-full object-cover">
                 <button type="button" class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity" @click="removeImage(i)">

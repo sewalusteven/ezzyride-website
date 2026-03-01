@@ -1,25 +1,24 @@
 <script setup lang="ts">
-const { user, logout } = useAuth()
+const { user, can } = useAuth()
 const route = useRoute()
-const loggingOut = ref(false)
+const sidebarOpen = useState('adminSidebar', () => false)
 
-const handleLogout = async () => {
-  loggingOut.value = true
-  await logout()
-}
-
-const navItems = [
-  { label: 'Dashboard',    icon: 'fa-chart-line', to: '/backoffice' },
-  { label: 'Vehicles',     icon: 'fa-car',             to: '/backoffice/vehicles' },
-  { label: 'Customers',    icon: 'fa-users',           to: '/backoffice/customers' },
-  { label: 'Transactions',   icon: 'fa-money-bill-wave',  to: '/backoffice/transactions' },
-  { label: 'Market Demand', icon: 'fa-arrow-trend-up',  to: '/backoffice/market-demand' },
-  { label: 'Valuations',    icon: 'fa-chart-bar',        to: '/backoffice/valuations' },
-  { label: 'Tax Settings', icon: 'fa-calculator', to: '/backoffice/tax-settings' },
-  { label: 'Inquiries',    icon: 'fa-envelope',   to: '/backoffice/inquiries' },
-  { label: 'Users',        icon: 'fa-users',      to: '/backoffice/users' },
-  { label: 'Settings',     icon: 'fa-cog',        to: '/backoffice/settings' },
+const allNavItems = [
+  { label: 'Dashboard',           icon: 'fa-chart-line',      to: '/backoffice',                    permission: 'ui.menu.dashboard' },
+  { label: 'Vehicles',            icon: 'fa-car',             to: '/backoffice/vehicles',           permission: 'ui.menu.vehicles' },
+  { label: 'Customers',           icon: 'fa-users',           to: '/backoffice/customers',          permission: 'ui.menu.customers' },
+  { label: 'Transactions',        icon: 'fa-money-bill-wave', to: '/backoffice/transactions',       permission: 'ui.menu.transactions' },
+  { label: 'Market Demand',       icon: 'fa-arrow-trend-up',  to: '/backoffice/market-demand',      permission: 'ui.menu.market-demand' },
+  { label: 'Import Applications', icon: 'fa-file-import',     to: '/backoffice/import-applications',permission: 'ui.menu.import-applications' },
+  { label: 'Valuations',          icon: 'fa-chart-bar',       to: '/backoffice/valuations',         permission: 'ui.menu.valuations' },
+  { label: 'Tax Settings',        icon: 'fa-calculator',      to: '/backoffice/tax-settings',       permission: 'ui.menu.tax-settings' },
+  { label: 'Inquiries',           icon: 'fa-envelope',        to: '/backoffice/inquiries',          permission: 'ui.menu.inquiries' },
+  { label: 'Mailing List',        icon: 'fa-envelope-open-text', to: '/backoffice/mailing-list',      permission: 'ui.menu.mailing-list' },
+  { label: 'Users',               icon: 'fa-user-shield',     to: '/backoffice/users',              permission: 'ui.menu.users' },
+  { label: 'Settings',            icon: 'fa-cog',             to: '/backoffice/settings',           permission: 'ui.menu.settings' },
 ]
+
+const navItems = computed(() => allNavItems.filter(item => can(item.permission)))
 
 const isActive = (to: string) =>
   to === '/backoffice'
@@ -28,16 +27,27 @@ const isActive = (to: string) =>
 </script>
 
 <template>
-  <aside id="sidebar" class="fixed left-0 top-0 w-64 h-full bg-white border-r border-gray-200 z-50 flex flex-col">
-    <div class="p-4 border-b border-gray-200">
-      <div class="flex items-center">
+  <aside
+    class="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 z-50 flex flex-col transition-transform duration-300 ease-in-out"
+    :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+  >
+    <!-- Logo + close -->
+    <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+      <NuxtLink to="/backoffice" class="flex items-center" @click="sidebarOpen = false">
         <span class="text-primary font-bold text-xl">EzzyRide</span>
         <span class="text-secondary font-semibold text-sm ml-1">Admin</span>
-      </div>
+      </NuxtLink>
+      <button
+        class="lg:hidden p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+        @click="sidebarOpen = false"
+      >
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
     </div>
 
-    <nav class="p-2 flex-1">
-      <div class="space-y-1">
+    <!-- Nav -->
+    <nav class="p-2 flex-1 overflow-y-auto">
+      <div class="space-y-0.5">
         <NuxtLink
           v-for="item in navItems"
           :key="item.to"
@@ -47,36 +57,23 @@ const isActive = (to: string) =>
             ? 'bg-primary/10 text-primary font-medium'
             : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'"
         >
-          <i :class="`fa-solid ${item.icon} w-4 h-4 mr-3`"></i>
+          <i :class="`fa-solid ${item.icon} w-4 mr-3 text-center`"></i>
           {{ item.label }}
         </NuxtLink>
       </div>
     </nav>
 
-    <!-- User + Logout pinned to bottom -->
+    <!-- User info (no logout — that's in the header dropdown) -->
     <div class="p-3 border-t border-gray-200">
-      <div class="flex items-center gap-3 px-2 py-2 mb-1">
+      <div class="flex items-center gap-3 px-2 py-2">
         <div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white text-xs font-bold shrink-0">
           {{ user?.name?.charAt(0).toUpperCase() ?? 'A' }}
         </div>
         <div class="min-w-0">
           <p class="text-sm font-medium text-gray-800 truncate">{{ user?.name ?? 'Admin' }}</p>
-          <p class="text-xs text-gray-400 truncate">{{ user?.email ?? '' }}</p>
+          <p class="text-xs text-gray-400 truncate capitalize">{{ user?.role ?? '' }}</p>
         </div>
       </div>
-      <button
-        :disabled="loggingOut"
-        class="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
-        @click="handleLogout"
-      >
-        <i v-if="loggingOut" class="fa-solid fa-spinner fa-spin"></i>
-        <i v-else class="fa-solid fa-right-from-bracket"></i>
-        {{ loggingOut ? 'Signing out...' : 'Sign out' }}
-      </button>
     </div>
   </aside>
 </template>
-
-<style scoped>
-
-</style>

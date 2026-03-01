@@ -52,7 +52,10 @@ const handleLogin = async () => {
 
     <!-- Password Field -->
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+      <div class="flex items-center justify-between mb-2">
+        <label class="block text-sm font-medium text-gray-700">Password</label>
+        <NuxtLink to="/auth/forgot-password" class="text-xs text-primary hover:underline">Forgot password?</NuxtLink>
+      </div>
       <div class="relative">
         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <i class="fa-solid fa-lock text-gray-400"></i>

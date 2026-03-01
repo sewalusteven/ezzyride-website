@@ -26,9 +26,21 @@ export default defineNuxtConfig({
       storageUrl: 'http://localhost/storage',
     }
   },
-  ssr: false,
+  // SSR enabled globally so public pages get proper meta tags in initial HTML (SEO).
+  // Admin and auth routes stay client-side only via routeRules below.
+  ssr: true,
+  routeRules: {
+    // Admin panel — CSR only (auth-gated, no SEO needed)
+    '/backoffice/**': { ssr: false },
+    // Auth pages — CSR only
+    '/auth/**': { ssr: false },
+    // Truly static pages — prerender at build time for fastest possible load + full SEO
+    '/about': { prerender: true },
+    '/contact': { prerender: true },
+    '/import-assistance': { prerender: true },
+  },
   compatibilityDate: '2025-07-15',
-  devtools: { enabled: true },
+  devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
   vite: {
     plugins: [

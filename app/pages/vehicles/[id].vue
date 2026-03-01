@@ -200,7 +200,7 @@ const sendInquiry = async () => {
                 <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 capitalize">{{ category }}</h4>
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-y-2">
                   <div v-for="feat in items" :key="feat.id" class="flex items-center gap-2 text-sm text-gray-700">
-                    <i :class="feat.icon ?? 'fa-solid fa-check'" class="text-primary text-xs w-4 shrink-0"></i>
+                    <i :class="feat.icon ? `fa-solid ${feat.icon}` : 'fa-solid fa-check'" class="text-primary text-xs w-4 shrink-0"></i>
                     {{ feat.name }}
                   </div>
                 </div>
@@ -289,7 +289,7 @@ const sendInquiry = async () => {
                 </div>
                 <div class="flex items-center gap-2">
                   <div class="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
-                    <i class="fa-solid fa-engine text-primary text-xs"></i>
+                    <i class="fa-solid fa-gauge text-primary text-xs"></i>
                   </div>
                   <div>
                     <div class="text-xs text-gray-400">Engine</div>

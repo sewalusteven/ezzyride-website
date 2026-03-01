@@ -64,7 +64,7 @@ const fetchVehicles = async (page = 1) => {
 
 const fetchBrands = async () => {
   try {
-    const { data } = await $api.get('/v1/config/vehicle-brands', { params: { per_page: 100 } })
+    const { data } = await $api.get('/web/config/vehicle-brands', { params: { per_page: 100 } })
     brands.value = data.data.filter((b: any) => b.is_active)
   } catch {}
 }

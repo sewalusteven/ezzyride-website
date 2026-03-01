@@ -16,12 +16,16 @@ interface Vehicle {
   primaryImage: string | null; status: string
 }
 const featuredVehicles = ref<Vehicle[]>([])
+const vehiclesLoaded   = ref(false)
 
 onMounted(async () => {
   try {
     const { data } = await $api.get('/web/vehicles', { params: { limit: 6 } })
     featuredVehicles.value = data.data
   } catch {}
+  finally {
+    vehiclesLoaded.value = true
+  }
 })
 
 const fmtPrice = (v: string | null) => v ? 'UGX ' + Number(v).toLocaleString() : 'Contact for price'
@@ -156,8 +160,8 @@ const faqs = [
       </div>
     </section>
 
-    <!-- ── Featured Vehicles ─────────────────────────────────────────────── -->
-    <section class="py-20 bg-gray-50">
+    <!-- ── Featured Vehicles — hidden entirely when none are listed ──────── -->
+    <section v-if="!vehiclesLoaded || featuredVehicles.length > 0" class="py-20 bg-gray-50">
       <div class="container mx-auto px-4">
         <div class="flex items-end justify-between mb-12">
           <div>
@@ -169,8 +173,8 @@ const faqs = [
           </NuxtLink>
         </div>
 
-        <!-- Skeleton / Empty -->
-        <div v-if="featuredVehicles.length === 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <!-- Skeleton shown only while loading -->
+        <div v-if="!vehiclesLoaded" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           <div v-for="i in 3" :key="i" class="bg-white rounded-2xl overflow-hidden shadow-sm animate-pulse">
             <div class="h-52 bg-gray-200"></div>
             <div class="p-5 space-y-3">
@@ -221,7 +225,7 @@ const faqs = [
           </NuxtLink>
         </div>
 
-        <div class="text-center mt-10 md:hidden">
+        <div v-if="featuredVehicles.length > 0" class="text-center mt-10 md:hidden">
           <NuxtLink to="/vehicles" class="inline-flex items-center gap-2 bg-secondary text-white px-6 py-3 rounded-full font-medium hover:bg-secondary/90 transition-colors">
             View All Vehicles <i class="fa-solid fa-arrow-right"></i>
           </NuxtLink>

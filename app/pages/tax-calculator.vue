@@ -29,34 +29,36 @@ const prefillVehicle = (vehicle: VehicleValuation) => {
 
 // ── Submit ────────────────────────────────────────────────────────────────
 const submit = () => {
-  // Resolve final CIF: manual input wins; fall back to valuation CIF
-  const parsedInput = parseFloat(cifInput.value)
-  const finalCif = parsedInput > 0 ? parsedInput : parseFloat(selectedValuation.value?.cif ?? '0') || 0
+  // Use valuation CIF for tax calculation if available, otherwise use manual input
+  const calculationCif = selectedValuation.value
+      ? parseFloat(selectedValuation.value.cif)
+      : parseFloat(cifInput.value) || 0
 
-  if (finalCif === 0 || !form.value.year) {
+  if (calculationCif === 0 || !form.value.year) {
     Notify.failure('Please provide the vehicle year and a CIF value (or select a vehicle from the valuation search above).')
     return
   }
 
-  form.value.cif = finalCif
+  form.value.cif = calculationCif
 
   Loading.standard('Calculating taxes…')
   fetchTaxes(form.value)
-    .then(res => {
-      taxObject.value = res
-      Loading.remove()
-      // Scroll to results on mobile
-      if (window.innerWidth < 1024) {
-        setTimeout(() => {
-          document.getElementById('results-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }, 100)
-      }
-    })
-    .catch(err => {
-      Loading.remove()
-      Notify.failure(err?.response?.data?.message ?? 'Calculation failed')
-    })
+      .then(res => {
+        taxObject.value = res
+        Loading.remove()
+        // Scroll to results on mobile
+        if (window.innerWidth < 1024) {
+          setTimeout(() => {
+            document.getElementById('results-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }, 100)
+        }
+      })
+      .catch(err => {
+        Loading.remove()
+        Notify.failure(err?.response?.data?.message ?? 'Calculation failed')
+      })
 }
+
 
 // ── Display computed ──────────────────────────────────────────────────────
 const displayCif = computed(() => {

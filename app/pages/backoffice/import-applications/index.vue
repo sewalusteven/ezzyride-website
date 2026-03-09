@@ -43,6 +43,7 @@ interface NewAppForm {
   applicant_phone: string
   applicant_email: string
   service_type: string
+  vehicle_valuation_id: number | null
   vehicle_description: string
   vehicle_year: string
   vehicle_link: string
@@ -76,6 +77,7 @@ const form = ref<NewAppForm>({
   applicant_phone: '',
   applicant_email: '',
   service_type: 'full_import',
+  vehicle_valuation_id: null,
   vehicle_description: '',
   vehicle_year: '',
   vehicle_link: '',
@@ -86,6 +88,49 @@ const form = ref<NewAppForm>({
   notes: '',
   internal_notes: '',
 })
+
+// ── Valuation search typeahead ────────────────────────────────────────────
+interface ValuationResult { id: number; name: string; cif: string; cc: string; originCode: string }
+const vehicleQuery       = ref('')
+const vehicleResults     = ref<ValuationResult[]>([])
+const vehicleSearching   = ref(false)
+const vehicleTimer       = ref<ReturnType<typeof setTimeout> | null>(null)
+const selectedValuation  = ref<ValuationResult | null>(null)
+
+const onVehicleInput = () => {
+  if (vehicleTimer.value) clearTimeout(vehicleTimer.value)
+  vehicleResults.value = []
+  if (vehicleQuery.value.length < 2) return
+  vehicleTimer.value = setTimeout(searchVehicles, 300)
+}
+
+const searchVehicles = async () => {
+  vehicleSearching.value = true
+  try {
+    const { data } = await $api.post('/web/valuation/search', { name: vehicleQuery.value })
+    vehicleResults.value = (data.data ?? []).map((v: any) => ({
+      id: v.id, name: v.name, cif: v.cif, cc: v.cc, originCode: v.originCode,
+    }))
+  } catch {
+    vehicleResults.value = []
+  } finally {
+    vehicleSearching.value = false
+  }
+}
+
+const pickVehicle = (v: ValuationResult) => {
+  selectedValuation.value = v
+  form.value.vehicle_valuation_id = v.id
+  vehicleQuery.value = ''
+  vehicleResults.value = []
+}
+
+const clearVehicle = () => {
+  selectedValuation.value = null
+  form.value.vehicle_valuation_id = null
+  vehicleQuery.value = ''
+  vehicleResults.value = []
+}
 
 // ── Fetch stats ───────────────────────────────────────────────────────────
 const fetchStats = async () => {
@@ -126,10 +171,11 @@ watch(statsPeriod, () => fetchStats())
 const openModal = () => {
   form.value = {
     customer_id: '', applicant_name: '', applicant_phone: '', applicant_email: '',
-    service_type: 'full_import', vehicle_description: '', vehicle_year: '',
-    vehicle_link: '', budget_usd: '', timeline: 'flexible', service_fee_ugx: '',
-    submitted_via: 'backoffice', notes: '', internal_notes: '',
+    service_type: 'full_import', vehicle_valuation_id: null, vehicle_description: '',
+    vehicle_year: '', vehicle_link: '', budget_usd: '', timeline: 'flexible',
+    service_fee_ugx: '', submitted_via: 'backoffice', notes: '', internal_notes: '',
   }
+  clearVehicle()
   modalError.value = ''
   showModal.value = true
 }
@@ -139,8 +185,8 @@ const submitNew = async () => {
   modalError.value = ''
   try {
     const payload: Record<string, any> = { ...form.value }
-    // clean up empty strings
-    Object.keys(payload).forEach(k => { if (payload[k] === '') delete payload[k] })
+    // clean up empty strings and nulls
+    Object.keys(payload).forEach(k => { if (payload[k] === '' || payload[k] === null) delete payload[k] })
     const { data } = await $api.post('/v1/import-applications', payload)
     showModal.value = false
     await navigateTo(`/backoffice/import-applications/${data.data.id}`)
@@ -494,7 +540,7 @@ onMounted(() => {
                 <label class="block text-xs font-medium text-gray-700 mb-1">Budget (USD)</label>
                 <input v-model="form.budget_usd" type="number" min="0" step="100" placeholder="0" class="input-field" />
               </div>
-              <div>
+              <div v-if="form.service_type === 'custom'">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Service Fee (UGX)</label>
                 <input v-model="form.service_fee_ugx" type="number" min="0" step="1000" placeholder="0" class="input-field" />
               </div>
@@ -504,9 +550,71 @@ onMounted(() => {
           <!-- Vehicle -->
           <fieldset class="border border-gray-200 rounded-lg p-4 space-y-3">
             <legend class="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1">Vehicle Details</legend>
+
+            <!-- Valuation search / selected chip -->
             <div>
-              <label class="block text-xs font-medium text-gray-700 mb-1">Vehicle Description</label>
-              <input v-model="form.vehicle_description" type="text" placeholder="e.g. Toyota Prado 2018 V8" class="input-field" />
+              <label class="block text-xs font-medium text-gray-700 mb-1">URA Valuation Lookup</label>
+              <div class="relative">
+                <!-- Selected valuation chip -->
+                <div v-if="selectedValuation"
+                  class="flex items-center gap-3 border border-green-300 bg-green-50 rounded-lg px-3 py-2">
+                  <i class="fa-solid fa-circle-check text-green-500 shrink-0 text-sm"></i>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-gray-800 truncate">{{ selectedValuation.name }}</div>
+                    <div class="text-xs text-gray-400">CIF USD {{ selectedValuation.cif }} · {{ selectedValuation.cc }}cc · {{ selectedValuation.originCode }}</div>
+                  </div>
+                  <button type="button" @click="clearVehicle"
+                    class="text-gray-400 hover:text-red-500 shrink-0 text-xs">
+                    <i class="fa-solid fa-xmark"></i> Change
+                  </button>
+                </div>
+
+                <!-- Search input -->
+                <div v-else class="relative">
+                  <input
+                    v-model="vehicleQuery"
+                    @input="onVehicleInput"
+                    type="text"
+                    placeholder="Search vehicle by name (e.g. Toyota Land Cruiser Prado)"
+                    class="input-field pr-9"
+                  />
+                  <span class="absolute right-3 top-2 text-gray-400 pointer-events-none">
+                    <i v-if="vehicleSearching" class="fa-solid fa-spinner fa-spin text-xs"></i>
+                    <i v-else class="fa-solid fa-magnifying-glass text-xs"></i>
+                  </span>
+
+                  <!-- Dropdown results -->
+                  <div v-if="vehicleResults.length > 0"
+                    class="absolute z-30 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-52 overflow-y-auto">
+                    <button
+                      v-for="v in vehicleResults"
+                      :key="v.id"
+                      type="button"
+                      @click="pickVehicle(v)"
+                      class="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-0 transition-colors"
+                    >
+                      <div class="font-medium text-gray-800">{{ v.name }}</div>
+                      <div class="text-xs text-gray-400">CIF USD {{ v.cif }} · {{ v.cc }}cc · {{ v.originCode }}</div>
+                    </button>
+                  </div>
+
+                  <p v-else-if="vehicleQuery.length >= 2 && !vehicleSearching"
+                    class="text-xs text-gray-400 mt-1">
+                    No match — describe the vehicle manually below.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">
+                {{ selectedValuation ? 'Additional Details (optional)' : 'Vehicle Description' }}
+              </label>
+              <input v-model="form.vehicle_description" type="text"
+                :placeholder="selectedValuation
+                  ? 'e.g. colour, sunroof, low mileage'
+                  : 'e.g. Toyota Prado 2018 V8'"
+                class="input-field" />
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>

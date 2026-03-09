@@ -290,6 +290,49 @@ const deleteDoc = async (doc: Document) => {
   } catch {}
 }
 
+// ── Valuation search typeahead (edit modal) ───────────────────────────────
+interface ValuationResult { id: number; name: string; cif: string; cc: string; originCode: string }
+const editVehicleQuery       = ref('')
+const editVehicleResults     = ref<ValuationResult[]>([])
+const editVehicleSearching   = ref(false)
+const editVehicleTimer       = ref<ReturnType<typeof setTimeout> | null>(null)
+const editSelectedValuation  = ref<ValuationResult | null>(null)
+
+const onEditVehicleInput = () => {
+  if (editVehicleTimer.value) clearTimeout(editVehicleTimer.value)
+  editVehicleResults.value = []
+  if (editVehicleQuery.value.length < 2) return
+  editVehicleTimer.value = setTimeout(searchEditVehicles, 300)
+}
+
+const searchEditVehicles = async () => {
+  editVehicleSearching.value = true
+  try {
+    const { data } = await $api.post('/web/valuation/search', { name: editVehicleQuery.value })
+    editVehicleResults.value = (data.data ?? []).map((v: any) => ({
+      id: v.id, name: v.name, cif: v.cif, cc: v.cc, originCode: v.originCode,
+    }))
+  } catch {
+    editVehicleResults.value = []
+  } finally {
+    editVehicleSearching.value = false
+  }
+}
+
+const pickEditVehicle = (v: ValuationResult) => {
+  editSelectedValuation.value = v
+  editForm.value.vehicle_valuation_id = v.id
+  editVehicleQuery.value = ''
+  editVehicleResults.value = []
+}
+
+const clearEditVehicle = () => {
+  editSelectedValuation.value = null
+  editForm.value.vehicle_valuation_id = null
+  editVehicleQuery.value = ''
+  editVehicleResults.value = []
+}
+
 // ── Edit application ──────────────────────────────────────────────────────
 const openEdit = () => {
   if (!app.value) return
@@ -298,6 +341,7 @@ const openEdit = () => {
     applicant_phone: app.value.applicantPhone ?? '',
     applicant_email: app.value.applicantEmail ?? '',
     service_type: app.value.serviceType,
+    vehicle_valuation_id: app.value.vehicleValuationId ?? null,
     vehicle_description: app.value.vehicleDescription ?? '',
     vehicle_year: app.value.vehicleYear ?? '',
     vehicle_link: app.value.vehicleLink ?? '',
@@ -311,6 +355,20 @@ const openEdit = () => {
     stall_reason: app.value.stallReason ?? '',
     stall_resolution: app.value.stallResolution ?? '',
   }
+  // Restore selected valuation chip if one was already linked
+  if (app.value.vehicleValuation) {
+    editSelectedValuation.value = {
+      id: app.value.vehicleValuation.id,
+      name: app.value.vehicleValuation.name,
+      cif: app.value.vehicleValuation.cif,
+      cc: '',
+      originCode: '',
+    }
+  } else {
+    editSelectedValuation.value = null
+  }
+  editVehicleQuery.value = ''
+  editVehicleResults.value = []
   editError.value = ''
   showEditModal.value = true
 }
@@ -320,7 +378,7 @@ const submitEdit = async () => {
   editError.value = ''
   try {
     const payload = { ...editForm.value }
-    Object.keys(payload).forEach(k => { if (payload[k] === '') delete payload[k] })
+    Object.keys(payload).forEach(k => { if (payload[k] === '' || payload[k] === null) delete payload[k] })
     await $api.patch(`/v1/import-applications/${id}`, payload)
     showEditModal.value = false
     showSuccess('Application updated')
@@ -1281,7 +1339,7 @@ onMounted(fetch)
               </label>
               <input v-model="editForm.transport_cost_ugx" type="number" min="0" step="1" class="input-field" />
             </div>
-            <div>
+            <div v-if="editForm.service_type === 'custom'">
               <label class="block text-xs font-medium text-gray-700 mb-1">Service Fee (UGX)</label>
               <input v-model="editForm.service_fee_ugx" type="number" min="0" class="input-field" />
             </div>
@@ -1290,8 +1348,70 @@ onMounted(fetch)
               <input v-model="editForm.vehicle_year" type="number" min="1980" class="input-field" />
             </div>
           </div>
+
+          <!-- URA Valuation Lookup -->
           <div>
-            <label class="block text-xs font-medium text-gray-700 mb-1">Vehicle Description</label>
+            <label class="block text-xs font-medium text-gray-700 mb-1">URA Valuation Lookup</label>
+            <div class="relative">
+              <!-- Selected valuation chip -->
+              <div v-if="editSelectedValuation"
+                class="flex items-center gap-3 border border-green-300 bg-green-50 rounded-lg px-3 py-2">
+                <i class="fa-solid fa-circle-check text-green-500 shrink-0 text-sm"></i>
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm font-medium text-gray-800 truncate">{{ editSelectedValuation.name }}</div>
+                  <div class="text-xs text-gray-400">
+                    CIF USD {{ editSelectedValuation.cif }}
+                    <template v-if="editSelectedValuation.cc"> · {{ editSelectedValuation.cc }}cc</template>
+                    <template v-if="editSelectedValuation.originCode"> · {{ editSelectedValuation.originCode }}</template>
+                  </div>
+                </div>
+                <button type="button" @click="clearEditVehicle"
+                  class="text-gray-400 hover:text-red-500 shrink-0 text-xs">
+                  <i class="fa-solid fa-xmark"></i> Change
+                </button>
+              </div>
+
+              <!-- Search input -->
+              <div v-else class="relative">
+                <input
+                  v-model="editVehicleQuery"
+                  @input="onEditVehicleInput"
+                  type="text"
+                  placeholder="Search vehicle by name (e.g. Toyota Land Cruiser Prado)"
+                  class="input-field pr-9"
+                />
+                <span class="absolute right-3 top-2 text-gray-400 pointer-events-none">
+                  <i v-if="editVehicleSearching" class="fa-solid fa-spinner fa-spin text-xs"></i>
+                  <i v-else class="fa-solid fa-magnifying-glass text-xs"></i>
+                </span>
+
+                <!-- Dropdown results -->
+                <div v-if="editVehicleResults.length > 0"
+                  class="absolute z-30 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-52 overflow-y-auto">
+                  <button
+                    v-for="v in editVehicleResults"
+                    :key="v.id"
+                    type="button"
+                    @click="pickEditVehicle(v)"
+                    class="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-0 transition-colors"
+                  >
+                    <div class="font-medium text-gray-800">{{ v.name }}</div>
+                    <div class="text-xs text-gray-400">CIF USD {{ v.cif }} · {{ v.cc }}cc · {{ v.originCode }}</div>
+                  </button>
+                </div>
+
+                <p v-else-if="editVehicleQuery.length >= 2 && !editVehicleSearching"
+                  class="text-xs text-gray-400 mt-1">
+                  No match — describe the vehicle manually below.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">
+              {{ editSelectedValuation ? 'Additional Details (optional)' : 'Vehicle Description' }}
+            </label>
             <input v-model="editForm.vehicle_description" type="text" class="input-field" />
           </div>
           <div>

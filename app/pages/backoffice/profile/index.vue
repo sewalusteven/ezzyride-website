@@ -265,10 +265,10 @@ const cancelSetup = () => {
                 Scan this QR code with your authenticator app (Google Authenticator, Authy, 1Password, etc.)
               </p>
 
-              <!-- QR Code via Google Charts API -->
+              <!-- QR Code -->
               <div class="flex justify-center mb-3">
                 <img
-                  :src="`https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${encodeURIComponent(twoFaSetup.qr_url)}&choe=UTF-8`"
+                  :src="`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(twoFaSetup.qr_url)}`"
                   alt="2FA QR Code"
                   class="w-48 h-48 rounded-lg border border-gray-200"
                 />

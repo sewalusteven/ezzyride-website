@@ -157,9 +157,7 @@ const cancelSetup = () => {
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">Phone</label>
-            <input v-model="profileForm.phone" type="text"
-              class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              placeholder="+256 700 000000" />
+            <PhoneInput v-model="profileForm.phone" />
           </div>
         </div>
 

@@ -1296,7 +1296,7 @@ onMounted(fetch)
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-700 mb-1">Phone</label>
-              <input v-model="editForm.applicant_phone" type="text" class="input-field" />
+              <PhoneInput v-model="editForm.applicant_phone" />
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-700 mb-1">Email</label>

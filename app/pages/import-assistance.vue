@@ -313,8 +313,7 @@ const faqs = [
                     class="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
                 </div>
                 <div>
-                  <input v-model="form.phone" type="tel" placeholder="Phone / WhatsApp"
-                    class="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                  <PhoneInput v-model="form.phone" placeholder="Phone / WhatsApp" />
                 </div>
               </div>
               <p class="text-xs text-gray-400 mt-1">* At least one of email or phone is required</p>

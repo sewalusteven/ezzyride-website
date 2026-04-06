@@ -959,10 +959,8 @@ onMounted(() => { fetchPartner(); fetchCurrencyRates() })
                         <p v-if="currencyRates.length === 0" class="text-xs text-amber-600 mt-1">No currencies configured. Add them in Settings &rarr; Currency Rates.</p>
                       </div>
                       <div><label class="text-xs font-medium text-gray-600">Contact Person</label><input v-model="editForm.contact_name" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" /></div>
-                      <div class="grid grid-cols-2 gap-3">
-                        <div><label class="text-xs font-medium text-gray-600">Email</label><input v-model="editForm.contact_email" type="email" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" /></div>
-                        <div><label class="text-xs font-medium text-gray-600">Phone</label><input v-model="editForm.contact_phone" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" /></div>
-                      </div>
+                      <div><label class="text-xs font-medium text-gray-600">Email</label><input v-model="editForm.contact_email" type="email" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" /></div>
+                      <div><label class="text-xs font-medium text-gray-600">Phone</label><div class="mt-1"><PhoneInput v-model="editForm.contact_phone" /></div></div>
                       <div><label class="text-xs font-medium text-gray-600">Notes</label><textarea v-model="editForm.notes" rows="3" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"></textarea></div>
                       <div class="flex justify-end gap-2">
                         <button @click="editing = false" class="text-sm text-gray-500 hover:text-gray-700 px-3 py-2">Cancel</button>

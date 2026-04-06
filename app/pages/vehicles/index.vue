@@ -40,9 +40,13 @@ const fmtPrice = (v: string | null) => v ? 'UGX ' + Number(v).toLocaleString() :
 const fmtMileage = (n: number | null) => n ? n.toLocaleString() + ' km' : '—'
 const fmtCC = (n: number | null) => n ? n.toLocaleString() + ' cc' : '—'
 
-const statusColor = (s: string) => s === 'available'
-  ? 'bg-green-100 text-green-700'
-  : s === 'reserved' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'
+const statusColor = (s: string) => ({
+  available:  'bg-green-100 text-green-700',
+  reserved:   'bg-yellow-100 text-yellow-700',
+  in_transit: 'bg-blue-100 text-blue-700',
+}[s] ?? 'bg-gray-100 text-gray-500')
+
+const statusLabel = (s: string) => s === 'in_transit' ? 'In Transit' : s
 
 const fetchVehicles = async (page = 1) => {
   loading.value = true
@@ -248,7 +252,7 @@ onMounted(() => {
                 <i class="fa-solid fa-car text-5xl"></i>
               </div>
               <span class="absolute top-3 left-3 text-xs font-semibold px-2.5 py-1 rounded-full capitalize" :class="statusColor(v.status)">
-                {{ v.status }}
+                {{ statusLabel(v.status) }}
               </span>
             </div>
 

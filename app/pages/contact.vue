@@ -257,12 +257,7 @@ const sendMessage = async () => {
                   </div>
                   <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1.5">Phone / WhatsApp</label>
-                    <input
-                      v-model="form.phone"
-                      type="tel"
-                      placeholder="+256 700 000 000"
-                      class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    />
+                    <PhoneInput v-model="form.phone" />
                   </div>
                 </div>
                 <div>

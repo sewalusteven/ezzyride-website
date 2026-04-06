@@ -216,7 +216,7 @@ onMounted(() => fetchCustomers())
               </div>
               <div class="p-6 space-y-4">
                 <div v-if="createError" class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">{{ createError }}</div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4">
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Full Name <span class="text-red-500">*</span></label>
                     <input v-model="createForm.name" type="text" placeholder="e.g. John Doe"
@@ -224,10 +224,9 @@ onMounted(() => fetchCustomers())
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Phone <span class="text-red-500">*</span></label>
-                    <input v-model="createForm.phone" type="text" placeholder="e.g. +256 700 000000"
-                      class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
+                    <PhoneInput v-model="createForm.phone" :required="true" />
                   </div>
-                  <div class="col-span-2">
+                  <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
                     <input v-model="createForm.email" type="email" placeholder="e.g. john@example.com"
                       class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
@@ -248,12 +247,12 @@ onMounted(() => fetchCustomers())
                     <input v-model="createForm.id_number" type="text" placeholder="CM12345678"
                       class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
                   </div>
-                  <div class="col-span-2">
+                  <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Address</label>
                     <input v-model="createForm.address" type="text" placeholder="e.g. Kampala, Uganda"
                       class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none">
                   </div>
-                  <div class="col-span-2">
+                  <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Notes</label>
                     <textarea v-model="createForm.notes" rows="2" placeholder="Any notes about this customer…"
                       class="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary outline-none resize-none"></textarea>

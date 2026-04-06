@@ -330,21 +330,11 @@ const tabs = computed(() => [
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-600 mb-1.5">Phone Number</label>
-              <input
-                v-model="form.company_phone"
-                type="tel"
-                placeholder="+256 700 000 000"
-                class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
+              <PhoneInput v-model="form.company_phone" />
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-600 mb-1.5">WhatsApp Number</label>
-              <input
-                v-model="form.company_whatsapp"
-                type="tel"
-                placeholder="+256 700 000 000"
-                class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
+              <PhoneInput v-model="form.company_whatsapp" />
             </div>
             <div class="sm:col-span-2">
               <label class="block text-xs font-medium text-gray-600 mb-1.5">Physical Address</label>
@@ -630,7 +620,7 @@ const tabs = computed(() => [
               </div>
               <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">Number</label>
-                <input v-model="form.mobile_money_number" type="text" placeholder="e.g. 0771234567" class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                <PhoneInput v-model="form.mobile_money_number" />
               </div>
               <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">Registered Name</label>

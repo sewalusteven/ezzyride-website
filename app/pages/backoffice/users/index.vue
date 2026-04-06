@@ -278,9 +278,7 @@ const statusClass = (status: string) => ({
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">Phone (optional)</label>
-                <input v-model="createForm.phone" type="text"
-                  class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="+256 700 000000" />
+                <PhoneInput v-model="createForm.phone" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">Role</label>
@@ -327,8 +325,7 @@ const statusClass = (status: string) => ({
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">Phone</label>
-                <input v-model="editForm.phone" type="text"
-                  class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                <PhoneInput v-model="editForm.phone" />
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>

@@ -109,9 +109,11 @@ const fmtCurrency = (v: number, cur: string) => cur.toUpperCase() + ' ' + v.toLo
 const fmtMileage = (n: number | null) => n ? n.toLocaleString() + ' km' : '—'
 const fmtCC = (n: number | null) => n ? n.toLocaleString() + ' cc' : '—'
 
-const statusColor = (s: string) => s === 'available'
-  ? 'bg-green-100 text-green-700'
-  : s === 'reserved' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'
+const statusColor = (s: string) => ({
+  available:  'bg-green-100 text-green-700',
+  reserved:   'bg-yellow-100 text-yellow-700',
+  in_transit: 'bg-blue-100 text-blue-700',
+}[s] ?? 'bg-gray-100 text-gray-500')
 
 // Partner & deposit info
 const isPartnerVehicle = computed(() => !!vehicle.value?.partner)
@@ -130,7 +132,7 @@ const depositAmountUgx = computed(() => {
   if (!depositAmount.value || !usdRate.value) return null
   return Math.round(depositAmount.value * usdRate.value)
 })
-const canPurchase = computed(() => vehicle.value?.status === 'available')
+const canPurchase = computed(() => ['available', 'in_transit'].includes(vehicle.value?.status ?? ''))
 
 const featuresByCategory = computed(() => {
   const cats: Record<string, typeof vehicle.value.features> = {}
@@ -539,6 +541,12 @@ const calculateTax = async (val: VehicleValuation) => {
                 >
                   <i class="fa-solid fa-cart-shopping"></i> Start Purchase
                 </button>
+                <!-- In transit notice -->
+                <div v-if="vehicle.status === 'in_transit'" class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                  <i class="fa-solid fa-ship text-blue-600 mb-1"></i>
+                  <p class="text-sm font-medium text-blue-800">This vehicle is currently in transit</p>
+                  <p class="text-xs text-blue-600 mt-1">You can reserve it now while it's on its way to Uganda</p>
+                </div>
                 <!-- Reserved notice -->
                 <div v-else-if="vehicle.status === 'reserved'" class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
                   <i class="fa-solid fa-clock text-yellow-600 mb-1"></i>
@@ -602,12 +610,7 @@ const calculateTax = async (val: VehicleValuation) => {
                   />
                 </div>
                 <div>
-                  <input
-                    v-model="inqForm.phone"
-                    type="tel"
-                    placeholder="Phone / WhatsApp"
-                    class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
+                  <PhoneInput v-model="inqForm.phone" placeholder="Phone / WhatsApp" />
                 </div>
                 <div>
                   <textarea
@@ -738,12 +741,7 @@ const calculateTax = async (val: VehicleValuation) => {
               </div>
               <div>
                 <label class="text-xs text-gray-500 mb-1 block">Phone / WhatsApp</label>
-                <input
-                  v-model="purchaseForm.phone"
-                  type="tel"
-                  placeholder="+256 700 000 000"
-                  class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
+                <PhoneInput v-model="purchaseForm.phone" />
               </div>
               <!-- Reservation deposit for non-partner / local partner (direct sale) -->
               <div v-if="!isInternational">

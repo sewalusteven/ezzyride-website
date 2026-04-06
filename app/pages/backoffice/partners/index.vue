@@ -242,15 +242,13 @@ onMounted(() => { fetchPartners(); fetchCurrencyRates() })
                     <label class="text-xs font-medium text-gray-600">Contact Person</label>
                     <input v-model="createForm.contact_name" type="text" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
                   </div>
-                  <div class="grid grid-cols-2 gap-3">
-                    <div>
-                      <label class="text-xs font-medium text-gray-600">Email</label>
-                      <input v-model="createForm.contact_email" type="email" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                    </div>
-                    <div>
-                      <label class="text-xs font-medium text-gray-600">Phone</label>
-                      <input v-model="createForm.contact_phone" type="text" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                    </div>
+                  <div>
+                    <label class="text-xs font-medium text-gray-600">Email</label>
+                    <input v-model="createForm.contact_email" type="email" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                  </div>
+                  <div>
+                    <label class="text-xs font-medium text-gray-600">Phone</label>
+                    <div class="mt-1"><PhoneInput v-model="createForm.contact_phone" /></div>
                   </div>
                   <!-- Partner Type -->
                   <div>

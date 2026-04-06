@@ -203,7 +203,9 @@ const faqs = [
                 <i class="fa-solid fa-car text-gray-300 text-5xl"></i>
               </div>
               <div class="absolute top-3 left-3">
-                <span class="bg-green-500 text-white text-xs font-medium px-2.5 py-1 rounded-full capitalize">{{ v.status }}</span>
+                <span class="text-xs font-semibold px-2.5 py-1 rounded-full capitalize"
+                  :class="v.status === 'available' ? 'bg-green-100 text-green-700' : v.status === 'in_transit' ? 'bg-blue-100 text-blue-700' : v.status === 'reserved' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'"
+                >{{ v.status === 'in_transit' ? 'In Transit' : v.status }}</span>
               </div>
             </div>
             <!-- Info -->

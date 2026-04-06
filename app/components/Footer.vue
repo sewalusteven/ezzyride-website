@@ -55,13 +55,6 @@ const submitEmail = async () => {
           <h4 class="text-base font-semibold mb-4">Quick Links</h4>
           <ul class="space-y-2">
             <li v-for="link in [
-              { label: 'Home', to: '/' },
-              { label: 'Vehicles', to: '/vehicles' },
-              { label: 'Tax Calculator', to: '/tax-calculator' },
-              { label: 'Valuations', to: '/valuations' },
-              { label: 'Import Assistance', to: '/import-assistance' },
-              { label: 'About Us', to: '/about' },
-              { label: 'Contact Us', to: '/contact' },
               { label: 'Partner Integrations', to: '/partner-integrations' },
               { label: 'Terms & Conditions', to: '/terms' },
               { label: 'Privacy Policy', to: '/privacy' },

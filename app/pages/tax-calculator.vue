@@ -24,7 +24,7 @@ const marketRate      = ref<number | null>(null)
 // ── "What can I afford?" state ───────────────────────────────────────────
 const budgetInput     = ref<string>('')
 interface AffordTier { label: string; yearRange: string; cifUsd: number; cifUgx: number; tax: number }
-interface SuggestedVehicle { id: number; name: string; year: string; cif: number; cc: string; origin: string | null }
+interface SuggestedVehicle { id: number; name: string; cif: number; cc: string; origin: string | null }
 const affordResult    = ref<{ budget: number; tiers: AffordTier[]; suggestions: SuggestedVehicle[]; popularSearches: Record<string, number> } | null>(null)
 const affordLoading   = ref(false)
 const envLevyConfig   = ref<{ partialAgeMin: number; partialAgeMax: number; fullAgeMin: number } | null>(null)
@@ -258,10 +258,8 @@ const whatsappCalcUrl = computed(() => {
 
 const browseVehiclesUrl = computed(() => {
   if (!estimatedTotalUgx.value) return '/vehicles'
-  // Link to vehicles with a reasonable price range around the CIF UGX (not total with taxes)
-  const cifUgxValue = displayCif.value * cifRate.value
-  const maxPrice = Math.ceil(cifUgxValue * 1.2) // 20% buffer
-  return `/vehicles?price_max=${maxPrice}`
+  // Use the estimated total (CIF + taxes) as the max — this is the user's actual budget
+  return `/vehicles?price_max=${Math.ceil(estimatedTotalUgx.value)}`
 })
 
 const sendCalculationEmail = async () => {
@@ -421,7 +419,7 @@ const faqs = [
                       <p class="text-xs text-gray-400">Estimated taxes</p>
                       <p class="text-sm font-semibold text-yellow-300">{{ formatCurrency(tier.tax, 'UGX') }}</p>
                     </div>
-                    <NuxtLink :to="`/vehicles?price_max=${tier.cifUgx}`"
+                    <NuxtLink :to="`/vehicles?price_max=${affordResult!.budget}`"
                       class="shrink-0 bg-white/10 hover:bg-white/20 text-white text-xs font-medium py-2 px-3 rounded-lg transition-colors text-center">
                       Browse <i class="fa-solid fa-arrow-right ml-1"></i>
                     </NuxtLink>
@@ -431,7 +429,7 @@ const faqs = [
                 <div class="mt-4 bg-white/5 rounded-lg p-3">
                   <p class="text-xs text-gray-300">
                     <i class="fa-solid fa-info-circle mr-1"></i>
-                    Vehicles under 5 years pay no environmental levy — your full budget goes towards the car. Vehicles 5–8 years old pay a partial levy, and 8+ years pay the full levy, which reduces the CIF you can afford. These are estimates for standard non-luxury, non-EV vehicles.
+                    Vehicles under {{ envLevyConfig?.partialAgeMin ?? 9 }} years pay no environmental levy — your full budget goes towards the car. Vehicles {{ envLevyConfig?.partialAgeMin ?? 9 }}–{{ envLevyConfig?.fullAgeMin ?? 11 }} years old pay a partial levy, and {{ envLevyConfig?.fullAgeMin ?? 11 }}+ years pay the full levy, which reduces the CIF you can afford. These are estimates for standard non-luxury, non-EV vehicles.
                   </p>
                 </div>
               </div>
@@ -447,7 +445,7 @@ const faqs = [
                     class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2.5 hover:bg-gray-100 transition-colors">
                     <div class="min-w-0">
                       <p class="text-sm font-medium text-gray-800 truncate">{{ v.name }}</p>
-                      <p class="text-xs text-gray-400">{{ v.year }} · {{ v.cc }}cc{{ v.origin ? ' · ' + v.origin : '' }}</p>
+                      <p class="text-xs text-gray-400">{{ v.cc }}{{ v.origin ? ' · ' + v.origin : '' }}</p>
                     </div>
                     <span class="text-sm font-semibold text-primary shrink-0 ml-3">USD {{ v.cif.toLocaleString() }}</span>
                   </div>

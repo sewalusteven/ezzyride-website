@@ -92,6 +92,99 @@ const totalAmount = computed(() => {
   return formatCurrency(taxObject.value.totalCarValue ?? 0, 'UGX')
 })
 
+// ── Post-calculation conversion ──────────────────────────────────────────
+const config = useRuntimeConfig()
+const showEmailModal = ref(false)
+const emailForm = ref({ email: '', sending: false, sent: false, error: '' })
+
+const estimatedTotalUgx = computed(() => {
+  if (!taxObject.value) return 0
+  const c = displayCif.value
+  return c > 0 ? c * cifRate.value + taxObject.value.totalTax : taxObject.value.totalCarValue ?? 0
+})
+
+const vehicleSummary = computed(() => {
+  if (!selectedValuation.value && !form.value.make) return 'a vehicle'
+  return form.value.make || selectedValuation.value?.name || 'a vehicle'
+})
+
+const whatsappCalcMessage = computed(() => {
+  if (!taxObject.value) return ''
+  const lines = [
+    `Hi EzzyRide, I just calculated import taxes on your site.`,
+    ``,
+    `Vehicle: ${vehicleSummary.value}`,
+    `Year: ${form.value.year}`,
+    `CIF: USD ${displayCif.value.toLocaleString()}`,
+    `Total Taxes: ${formatCurrency(taxObject.value.totalTax, 'UGX')}`,
+    `Estimated Total: ${formatCurrency(estimatedTotalUgx.value, 'UGX')}`,
+    ``,
+    `I'd like to know more about importing this vehicle.`,
+  ]
+  return lines.join('\n')
+})
+
+const whatsappCalcUrl = computed(() => {
+  return `https://wa.me/${config.public.whatsappNumber}?text=${encodeURIComponent(whatsappCalcMessage.value)}`
+})
+
+const browseVehiclesUrl = computed(() => {
+  if (!estimatedTotalUgx.value) return '/vehicles'
+  // Link to vehicles with a reasonable price range around the CIF UGX (not total with taxes)
+  const cifUgxValue = displayCif.value * cifRate.value
+  const maxPrice = Math.ceil(cifUgxValue * 1.2) // 20% buffer
+  return `/vehicles?price_max=${maxPrice}`
+})
+
+const sendCalculationEmail = async () => {
+  if (!emailForm.value.email) return
+  emailForm.value.sending = true
+  emailForm.value.error = ''
+  try {
+    await $api.post('/web/tax-calculator/email', {
+      email: emailForm.value.email,
+      vehicle: vehicleSummary.value,
+      year: form.value.year,
+      cif_usd: displayCif.value,
+      total_tax: taxObject.value?.totalTax,
+      estimated_total: estimatedTotalUgx.value,
+      usd_rate: taxObject.value?.usdRate,
+      breakdown: {
+        importDuty: taxObject.value?.importDuty,
+        vat: taxObject.value?.vat,
+        withholding: taxObject.value?.withholding,
+        envLevy: taxObject.value?.envLevy,
+        infrastructureTax: taxObject.value?.infrastructureTax,
+        exciseDuty: taxObject.value?.exciseDuty,
+        formFees: taxObject.value?.formFees,
+        stampDuty: taxObject.value?.stampDuty,
+        registrationFees: taxObject.value?.registrationFees,
+      }
+    })
+    emailForm.value.sent = true
+    // Track conversion
+    if ((window as any).fbq) (window as any).fbq('track', 'Lead', { content_name: 'Tax Calculation Email' })
+  } catch {
+    emailForm.value.error = 'Failed to send. Please try again.'
+  } finally {
+    emailForm.value.sending = false
+  }
+}
+
+// Track tax calculation as a custom event
+watch(taxObject, (val) => {
+  if (val && import.meta.client) {
+    if ((window as any).fbq) {
+      (window as any).fbq('track', 'Search', {
+        search_string: vehicleSummary.value,
+        content_category: 'Tax Calculation',
+        value: estimatedTotalUgx.value,
+        currency: 'UGX',
+      })
+    }
+  }
+})
+
 // ── FAQ ───────────────────────────────────────────────────────────────────
 const openFaq = ref<number | null>(null)
 const faqs = [
@@ -262,15 +355,73 @@ const faqs = [
                 </div>
               </div>
 
-              <!-- CTA -->
-              <div class="flex flex-wrap gap-3">
-                <NuxtLink to="/import-assistance" class="flex-1 bg-primary hover:bg-red-700 text-white font-medium py-3 px-4 rounded-xl text-sm text-center transition-colors">
+              <!-- Conversion CTAs -->
+              <div class="space-y-3">
+                <!-- Primary: Browse vehicles -->
+                <NuxtLink :to="browseVehiclesUrl" class="block w-full bg-primary hover:bg-red-700 text-white font-semibold py-3.5 px-4 rounded-xl text-sm text-center transition-colors">
+                  <i class="fa-solid fa-car mr-2"></i>Browse Vehicles in This Price Range
+                </NuxtLink>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <!-- WhatsApp -->
+                  <a :href="whatsappCalcUrl" target="_blank" rel="noopener"
+                    class="flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20BD5A] text-white font-medium py-3 px-4 rounded-xl text-sm transition-colors">
+                    <i class="fa-brands fa-whatsapp text-lg"></i> Chat About This
+                  </a>
+                  <!-- Email me -->
+                  <button @click="showEmailModal = true"
+                    class="flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-medium py-3 px-4 rounded-xl text-sm transition-colors">
+                    <i class="fa-solid fa-envelope"></i> Email Me This
+                  </button>
+                </div>
+
+                <!-- Import assistance -->
+                <NuxtLink to="/import-assistance" class="block w-full bg-white/5 hover:bg-white/10 text-white/80 font-medium py-3 px-4 rounded-xl text-sm text-center transition-colors border border-white/10">
                   <i class="fa-solid fa-ship mr-2"></i>Get Import Assistance
                 </NuxtLink>
-                <NuxtLink to="/contact" class="flex-1 bg-white/10 hover:bg-white/20 text-white font-medium py-3 px-4 rounded-xl text-sm text-center transition-colors">
-                  <i class="fa-solid fa-headset mr-2"></i>Talk to an Expert
-                </NuxtLink>
               </div>
+
+              <!-- Email modal -->
+              <Teleport to="body">
+                <div v-if="showEmailModal" class="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4" @click.self="showEmailModal = false">
+                  <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
+                    <div class="bg-secondary px-5 py-3.5 flex items-center justify-between">
+                      <h3 class="text-white font-semibold text-sm">Email Tax Breakdown</h3>
+                      <button @click="showEmailModal = false" class="text-white/60 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="p-5">
+                      <div v-if="emailForm.sent" class="text-center py-4">
+                        <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <i class="fa-solid fa-check text-green-600 text-xl"></i>
+                        </div>
+                        <p class="font-semibold text-gray-900 mb-1">Sent!</p>
+                        <p class="text-sm text-gray-500">Check your inbox for the tax breakdown.</p>
+                        <button @click="showEmailModal = false" class="mt-3 text-sm text-primary hover:underline">Close</button>
+                      </div>
+                      <form v-else @submit.prevent="sendCalculationEmail" class="space-y-3">
+                        <p class="text-sm text-gray-600">We'll send a detailed tax breakdown for <strong>{{ vehicleSummary }}</strong> to your email.</p>
+                        <div v-if="emailForm.error" class="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{{ emailForm.error }}</div>
+                        <input
+                          v-model="emailForm.email"
+                          type="email"
+                          required
+                          placeholder="your@email.com"
+                          class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                        <label class="flex items-start gap-2 text-xs text-gray-500">
+                          <input type="checkbox" checked disabled class="mt-0.5 rounded border-gray-300" />
+                          <span>Also add me to the EzzyRide mailing list for new vehicle alerts</span>
+                        </label>
+                        <button type="submit" :disabled="emailForm.sending"
+                          class="w-full bg-primary hover:bg-red-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors">
+                          <i v-if="emailForm.sending" class="fa-solid fa-spinner fa-spin mr-1"></i>
+                          {{ emailForm.sending ? 'Sending…' : 'Send Breakdown' }}
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </Teleport>
             </div>
           </div>
         </div>

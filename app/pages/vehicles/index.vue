@@ -48,6 +48,8 @@ const statusColor = (s: string) => ({
 
 const statusLabel = (s: string) => s === 'in_transit' ? 'In Transit' : s
 
+const route = useRoute()
+
 const fetchVehicles = async (page = 1) => {
   loading.value = true
   try {
@@ -58,6 +60,9 @@ const fetchVehicles = async (page = 1) => {
     if (filterTrans.value)      params.transmission = filterTrans.value.toLowerCase()
     if (filterYearF.value)      params.year_from    = filterYearF.value
     if (filterYearT.value)      params.year_to      = filterYearT.value
+    // Support price_max from URL (e.g. from tax calculator CTA)
+    const priceMax = route.query.price_max as string | undefined
+    if (priceMax)               params.price_max    = priceMax
     const { data } = await $api.get('/web/vehicles', { params })
     vehicles.value = data.data
     meta.value     = data.meta

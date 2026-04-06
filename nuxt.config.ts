@@ -24,6 +24,8 @@ export default defineNuxtConfig({
     public: {
       beUrl: 'http://localhost/api',
       storageUrl: 'http://localhost/storage',
+      metaPixelId: '', // Set NUXT_PUBLIC_META_PIXEL_ID env var in production
+      whatsappNumber: '256700000000', // Set NUXT_PUBLIC_WHATSAPP_NUMBER env var in production
     }
   },
   // SSR enabled globally so public pages get proper meta tags in initial HTML (SEO).

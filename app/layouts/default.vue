@@ -15,6 +15,7 @@ useSeoMeta({
     <Header />
     <slot />
     <Footer />
+    <WhatsAppButton />
 </div>
 </template>
 

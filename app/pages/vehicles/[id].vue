@@ -62,9 +62,55 @@ const selectedValuation    = ref<VehicleValuation | null>(null)
 const taxResult            = ref<TaxCalculatorResponse | null>(null)
 const taxCalculating       = ref(false)
 
+const vehicleTitle = computed(() => vehicle.value ? `${vehicle.value.brand?.name} ${vehicle.value.model} ${vehicle.value.year}` : '')
+
 useSeoMeta({
-  title: computed(() => vehicle.value ? `${vehicle.value.brand?.name} ${vehicle.value.model} ${vehicle.value.year} | EzzyRide Uganda` : 'Vehicle Details | EzzyRide Uganda'),
-  description: computed(() => vehicle.value?.description ?? 'Vehicle details and specifications — EzzyRide Uganda.'),
+  title: computed(() => vehicleTitle.value ? `${vehicleTitle.value} | EzzyRide Uganda` : 'Vehicle Details | EzzyRide Uganda'),
+  description: computed(() => {
+    if (!vehicle.value) return 'Vehicle details and specifications — EzzyRide Uganda.'
+    const v = vehicle.value
+    const price = v.sellingPrice ? `UGX ${Number(v.sellingPrice).toLocaleString()}` : 'Price on request'
+    return `${vehicleTitle.value} — ${price}. ${v.transmission}, ${v.fuelType}, ${v.mileage ? v.mileage.toLocaleString() + ' km' : ''}. Available at EzzyRide Uganda.`
+  }),
+  ogTitle: computed(() => vehicleTitle.value ? `${vehicleTitle.value} for Sale` : undefined),
+  ogDescription: computed(() => vehicle.value?.description || undefined),
+  ogImage: computed(() => vehicle.value?.primaryImage ? storageUrl(vehicle.value.primaryImage) : undefined),
+  ogType: 'product',
+})
+
+// JSON-LD structured data for Google rich results
+useHead({
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: computed(() => {
+        if (!vehicle.value) return '{}'
+        const v = vehicle.value
+        return JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'Car',
+          name: `${v.brand?.name} ${v.model} ${v.year}`,
+          brand: { '@type': 'Brand', name: v.brand?.name },
+          model: v.model,
+          modelDate: String(v.year),
+          vehicleTransmission: v.transmission === 'automatic' ? 'AutomaticTransmission' : 'ManualTransmission',
+          fuelType: v.fuelType === 'petrol' ? 'Gasoline' : v.fuelType === 'diesel' ? 'Diesel' : v.fuelType,
+          mileageFromOdometer: v.mileage ? { '@type': 'QuantitativeValue', value: v.mileage, unitCode: 'KMT' } : undefined,
+          vehicleEngine: v.engineCc ? { '@type': 'EngineSpecification', engineDisplacement: { '@type': 'QuantitativeValue', value: v.engineCc, unitCode: 'CMQ' } } : undefined,
+          color: v.colour,
+          image: v.primaryImage ? storageUrl(v.primaryImage) : undefined,
+          offers: {
+            '@type': 'Offer',
+            price: v.sellingPrice || undefined,
+            priceCurrency: 'UGX',
+            availability: v.status === 'available' || v.status === 'in_transit' ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+            seller: { '@type': 'Organization', name: 'EzzyRide Uganda', url: 'https://ezzyride.ug' },
+          },
+          url: `https://ezzyride.ug/vehicles/${v.id}`,
+        })
+      }),
+    },
+  ],
 })
 
 onMounted(async () => {

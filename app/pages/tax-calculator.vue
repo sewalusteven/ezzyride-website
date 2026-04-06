@@ -11,15 +11,54 @@ useSeoMeta({
 const { $api } = useNuxtApp()
 const { fetchTaxes, formatCurrency } = useTaxUtilities()
 
-// ── Form state ──��─────────────────────────────────────────────────────────
+// ── Calculator mode ──────────────────────────────────────────────────────
+const mode = ref<'calculate' | 'afford'>('calculate')
+
+// ── Form state ───────────────────────────────────────────────────────────
 const form = ref<TaxCalculatorPayload>({ cif: 0, year: '', isLuxury: false, make: '', isEV: false })
 const cifInput        = ref<string>('')
 const selectedValuation = ref<VehicleValuation | null>(null)
 const taxObject       = ref<TaxCalculatorResponse | undefined>()
 const marketRate      = ref<number | null>(null)
 
-// ── Fetch market rate from settings ─────────────────────���────────────────
+// ── "What can I afford?" state ───────────────────────────────────────────
+const budgetInput     = ref<string>('')
+interface AffordTier { label: string; yearRange: string; cifUsd: number; cifUgx: number; tax: number }
+interface SuggestedVehicle { id: number; name: string; year: string; cif: number; cc: string; origin: string | null }
+const affordResult    = ref<{ budget: number; tiers: AffordTier[]; suggestions: SuggestedVehicle[]; popularSearches: Record<string, number> } | null>(null)
+const affordLoading   = ref(false)
+const envLevyConfig   = ref<{ partialAgeMin: number; partialAgeMax: number; fullAgeMin: number } | null>(null)
+
+// ── Calculation history (local storage) ──────────────────────────────────
+interface CalcHistoryEntry {
+  vehicle: string; year: string; cifUsd: number; totalTax: number; estimatedTotal: number; date: string
+}
+const calcHistory = ref<CalcHistoryEntry[]>([])
+
+const loadHistory = () => {
+  if (!import.meta.client) return
+  try {
+    const raw = localStorage.getItem('ezzyride_calc_history')
+    if (raw) calcHistory.value = JSON.parse(raw)
+  } catch { /* ignore */ }
+}
+
+const saveToHistory = (entry: CalcHistoryEntry) => {
+  // Deduplicate by vehicle+year, keep last 10
+  calcHistory.value = [entry, ...calcHistory.value.filter(h => !(h.vehicle === entry.vehicle && h.year === entry.year))].slice(0, 10)
+  if (import.meta.client) {
+    localStorage.setItem('ezzyride_calc_history', JSON.stringify(calcHistory.value))
+  }
+}
+
+const clearHistory = () => {
+  calcHistory.value = []
+  if (import.meta.client) localStorage.removeItem('ezzyride_calc_history')
+}
+
+// ── Fetch market rate from settings ──────────────────────────────────────
 onMounted(async () => {
+  loadHistory()
   try {
     const { data } = await $api.get('/web/settings')
     const rate = parseFloat(data.data?.cif_usd_rate)
@@ -57,6 +96,17 @@ const submit = () => {
       .then(res => {
         taxObject.value = res
         Loading.remove()
+
+        // Save to history
+        saveToHistory({
+          vehicle: form.value.make || 'Custom CIF',
+          year: String(form.value.year),
+          cifUsd: displayCif.value,
+          totalTax: res.totalTax,
+          estimatedTotal: res.totalCarValue,
+          date: new Date().toISOString(),
+        })
+
         // Scroll to results on mobile
         if (window.innerWidth < 1024) {
           setTimeout(() => {
@@ -68,6 +118,84 @@ const submit = () => {
         Loading.remove()
         Notify.failure(err?.response?.data?.message ?? 'Calculation failed')
       })
+}
+
+// ── "What can I afford?" calculator ──────────────────────────────────────
+const calculateAfford = async () => {
+  const budget = parseFloat(budgetInput.value?.replace(/,/g, '') || '0')
+  if (budget <= 0) {
+    Notify.failure('Please enter your budget in UGX.')
+    return
+  }
+
+  affordLoading.value = true
+  affordResult.value = null
+
+  const rate = marketRate.value || 3750
+  const currentYear = new Date().getFullYear()
+
+  // Fetch env levy config first if not already loaded
+  if (!envLevyConfig.value) {
+    try {
+      const { data } = await $api.get('/web/tax-calculator/afford-suggestions', {
+        params: { cif_min: 0, cif_max: 1 } // minimal call just to get config
+      })
+      if (data.data.envLevyConfig) envLevyConfig.value = data.data.envLevyConfig
+    } catch { /* use defaults */ }
+  }
+
+  const partialMin = envLevyConfig.value?.partialAgeMin ?? 9
+  const fullMin    = envLevyConfig.value?.fullAgeMin ?? 11
+
+  // Build 3 tiers based on actual configured thresholds
+  const yearBrackets = [
+    { label: `Under ${partialMin} years`, yearRange: `${currentYear - partialMin + 1}–${currentYear}`, year: currentYear - Math.floor(partialMin / 2) },
+    { label: `${partialMin}–${fullMin} years`, yearRange: `${currentYear - fullMin}–${currentYear - partialMin}`, year: currentYear - Math.floor((partialMin + fullMin) / 2) },
+    { label: `Over ${fullMin} years`, yearRange: `${currentYear - fullMin - 6}–${currentYear - fullMin - 1}`, year: currentYear - fullMin - 3 },
+  ]
+
+  try {
+    const tiers: AffordTier[] = []
+
+    for (const bracket of yearBrackets) {
+      let cifUsd = (budget / 1.65) / rate
+
+      for (let i = 0; i < 5; i++) {
+        const res = await fetchTaxes({ cif: cifUsd, year: String(bracket.year), isLuxury: false, make: '', isEV: false })
+        const actualTotal = cifUsd * rate + res.totalTax
+        cifUsd = cifUsd * (budget / actualTotal)
+      }
+
+      const finalRes = await fetchTaxes({ cif: cifUsd, year: String(bracket.year), isLuxury: false, make: '', isEV: false })
+
+      tiers.push({
+        label: bracket.label,
+        yearRange: bracket.yearRange,
+        cifUsd: Math.floor(cifUsd),
+        cifUgx: Math.floor(cifUsd * rate),
+        tax: Math.floor(finalRes.totalTax),
+      })
+    }
+
+    // Fetch vehicle suggestions based on the best (newest) CIF range
+    let suggestions: SuggestedVehicle[] = []
+    let popularSearches: Record<string, number> = {}
+    try {
+      const bestTier = tiers[0] // highest CIF (newest bracket)
+      const { data } = await $api.get('/web/tax-calculator/afford-suggestions', {
+        params: { cif_min: Math.floor(bestTier.cifUsd * 0.5), cif_max: bestTier.cifUsd }
+      })
+      suggestions = data.data.matchingVehicles ?? []
+      popularSearches = data.data.popularSearches ?? {}
+      if (data.data.envLevyConfig) envLevyConfig.value = data.data.envLevyConfig
+    } catch { /* suggestions are optional */ }
+
+    affordResult.value = { budget, tiers, suggestions, popularSearches }
+  } catch {
+    Notify.failure('Calculation failed. Please try again.')
+  } finally {
+    affordLoading.value = false
+  }
 }
 
 
@@ -216,7 +344,156 @@ const faqs = [
     <!-- Calculator -->
     <section class="py-12 bg-white">
       <div class="container mx-auto px-4">
-        <div class="flex flex-col lg:flex-row gap-8">
+
+        <!-- Mode toggle -->
+        <div class="flex justify-center mb-8">
+          <div class="inline-flex bg-gray-100 rounded-xl p-1">
+            <button
+              @click="mode = 'calculate'"
+              class="px-5 py-2.5 rounded-lg text-sm font-medium transition-all"
+              :class="mode === 'calculate' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+            >
+              <i class="fa-solid fa-calculator mr-1.5"></i> Calculate Tax
+            </button>
+            <button
+              @click="mode = 'afford'"
+              class="px-5 py-2.5 rounded-lg text-sm font-medium transition-all"
+              :class="mode === 'afford' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+            >
+              <i class="fa-solid fa-wallet mr-1.5"></i> What Can I Afford?
+            </button>
+          </div>
+        </div>
+
+        <!-- ── "What Can I Afford?" Mode ─────────────────────────────── -->
+        <div v-if="mode === 'afford'" class="max-w-2xl mx-auto">
+          <div class="bg-light p-6 md:p-8 rounded-2xl shadow-sm">
+            <h2 class="text-2xl font-semibold font-montserrat text-secondary mb-2 flex items-center gap-3">
+              <i class="fa-solid fa-wallet text-primary"></i> What Can I Afford?
+            </h2>
+            <p class="text-sm text-gray-500 mb-6">Enter your total budget and we'll show you what CIF range you can import within — taxes included.</p>
+
+            <form @submit.prevent="calculateAfford" class="space-y-5">
+              <div>
+                <label class="block text-gray-700 font-medium mb-2 text-sm">Your Total Budget (UGX)</label>
+                <div class="relative">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">UGX</span>
+                  <input
+                    v-model="budgetInput"
+                    type="text"
+                    inputmode="numeric"
+                    class="w-full p-3 pl-14 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-lg font-semibold"
+                    placeholder="e.g. 80,000,000"
+                  />
+                </div>
+                <p class="text-xs text-gray-500 mt-1">This should be the maximum you're willing to spend in total (vehicle + all import taxes)</p>
+              </div>
+
+              <button type="submit" :disabled="affordLoading"
+                class="w-full bg-primary hover:bg-red-700 disabled:opacity-60 text-white font-bold py-4 px-8 rounded-xl transition duration-300 text-lg flex items-center justify-center gap-3">
+                <i v-if="affordLoading" class="fa-solid fa-spinner fa-spin"></i>
+                <i v-else class="fa-solid fa-search-dollar"></i>
+                {{ affordLoading ? 'Calculating…' : 'Show What I Can Afford' }}
+              </button>
+            </form>
+
+            <!-- Afford Results -->
+            <div v-if="affordResult" class="mt-8 space-y-4">
+              <div class="bg-secondary text-white rounded-xl p-6">
+                <h3 class="font-semibold text-lg mb-2">With a budget of {{ formatCurrency(affordResult.budget, 'UGX') }}</h3>
+                <p class="text-sm text-gray-300 mb-5">Here's what you can afford depending on the vehicle's age — older cars have higher environmental levies, so your CIF budget varies.</p>
+
+                <div class="space-y-3">
+                  <div v-for="tier in affordResult.tiers" :key="tier.label"
+                    class="bg-white/10 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                          :class="tier.label.includes('Under') ? 'bg-green-500/20 text-green-300' : tier.label.includes('5') ? 'bg-yellow-500/20 text-yellow-300' : 'bg-orange-500/20 text-orange-300'">
+                          {{ tier.label }}
+                        </span>
+                        <span class="text-xs text-gray-400">{{ tier.yearRange }}</span>
+                      </div>
+                      <p class="text-xl font-bold text-primary">USD {{ tier.cifUsd.toLocaleString() }}</p>
+                      <p class="text-xs text-gray-400">~{{ formatCurrency(tier.cifUgx, 'UGX') }} CIF</p>
+                    </div>
+                    <div class="text-right sm:text-right">
+                      <p class="text-xs text-gray-400">Estimated taxes</p>
+                      <p class="text-sm font-semibold text-yellow-300">{{ formatCurrency(tier.tax, 'UGX') }}</p>
+                    </div>
+                    <NuxtLink :to="`/vehicles?price_max=${tier.cifUgx}`"
+                      class="shrink-0 bg-white/10 hover:bg-white/20 text-white text-xs font-medium py-2 px-3 rounded-lg transition-colors text-center">
+                      Browse <i class="fa-solid fa-arrow-right ml-1"></i>
+                    </NuxtLink>
+                  </div>
+                </div>
+
+                <div class="mt-4 bg-white/5 rounded-lg p-3">
+                  <p class="text-xs text-gray-300">
+                    <i class="fa-solid fa-info-circle mr-1"></i>
+                    Vehicles under 5 years pay no environmental levy — your full budget goes towards the car. Vehicles 5–8 years old pay a partial levy, and 8+ years pay the full levy, which reduces the CIF you can afford. These are estimates for standard non-luxury, non-EV vehicles.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Matching vehicles from URA valuations -->
+              <div v-if="affordResult.suggestions.length > 0" class="bg-white rounded-xl p-5">
+                <h4 class="font-semibold text-secondary text-sm mb-3 flex items-center gap-2">
+                  <i class="fa-solid fa-car text-primary"></i> Vehicles You Could Afford
+                </h4>
+                <p class="text-xs text-gray-500 mb-3">Based on URA's official valuations with CIF in your range:</p>
+                <div class="space-y-2">
+                  <div v-for="v in affordResult.suggestions" :key="v.id"
+                    class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2.5 hover:bg-gray-100 transition-colors">
+                    <div class="min-w-0">
+                      <p class="text-sm font-medium text-gray-800 truncate">{{ v.name }}</p>
+                      <p class="text-xs text-gray-400">{{ v.year }} · {{ v.cc }}cc{{ v.origin ? ' · ' + v.origin : '' }}</p>
+                    </div>
+                    <span class="text-sm font-semibold text-primary shrink-0 ml-3">USD {{ v.cif.toLocaleString() }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Popular searches -->
+              <div v-if="Object.keys(affordResult.popularSearches).length > 0" class="bg-gray-50 rounded-xl p-5">
+                <h4 class="font-semibold text-secondary text-sm mb-3 flex items-center gap-2">
+                  <i class="fa-solid fa-fire text-orange-500"></i> Trending Searches
+                </h4>
+                <p class="text-xs text-gray-500 mb-3">Most calculated vehicles by other buyers:</p>
+                <div class="flex flex-wrap gap-2">
+                  <button v-for="(count, name) in affordResult.popularSearches" :key="name"
+                    @click="form.make = String(name); mode = 'calculate'"
+                    class="inline-flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 text-xs text-gray-700 hover:border-primary hover:text-primary transition-colors">
+                    {{ name }}
+                    <span class="text-[10px] text-gray-400">({{ count }})</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- CTAs -->
+              <div class="grid grid-cols-2 gap-3">
+                <a :href="`https://wa.me/${config.public.whatsappNumber}?text=${encodeURIComponent(`Hi EzzyRide, I have a budget of ${formatCurrency(affordResult.budget, 'UGX')} and I'm looking for a vehicle to import. Can you help me find something within my budget?`)}`"
+                  target="_blank" rel="noopener"
+                  class="flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20BD5A] text-white font-medium py-3 px-4 rounded-xl text-sm transition-colors">
+                  <i class="fa-brands fa-whatsapp text-lg"></i> Chat With Us
+                </a>
+                <NuxtLink to="/import-assistance"
+                  class="flex items-center justify-center gap-2 bg-secondary hover:bg-blue-900 text-white font-medium py-3 px-4 rounded-xl text-sm transition-colors">
+                  <i class="fa-solid fa-ship"></i> Import Assistance
+                </NuxtLink>
+              </div>
+
+              <!-- Vehicle alert -->
+              <VehicleAlertForm
+                :prefill-price-max="affordResult.tiers[0]?.cifUgx"
+                :compact="true"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Standard Calculator Mode ──────────────────────────────── -->
+        <div v-else class="flex flex-col lg:flex-row gap-8">
           <!-- ── Form ─────────────────────────────────────────────────── -->
           <div class="lg:w-5/12 bg-light p-6 md:p-8 rounded-2xl shadow-sm">
             <h2 class="text-2xl font-semibold font-montserrat text-secondary mb-6 flex items-center gap-3">
@@ -278,7 +555,7 @@ const faqs = [
 
             <div v-else class="space-y-5">
               <!-- Summary cards -->
-              <div class="grid grid-cols-3 gap-3 mb-2">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2">
                 <div class="bg-white/10 rounded-xl p-3 text-center">
                   <p class="text-xs text-gray-300 mb-1">USD Rate</p>
                   <p class="font-bold text-sm">{{ formatCurrency(taxObject.usdRate, 'UGX').replace('UGX', '').trim() }}</p>
@@ -422,6 +699,39 @@ const faqs = [
                   </div>
                 </div>
               </Teleport>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Calculation History -->
+    <section v-if="calcHistory.length > 0" class="py-10 bg-white border-t border-gray-100">
+      <div class="container mx-auto px-4">
+        <div class="max-w-3xl mx-auto">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-secondary flex items-center gap-2">
+              <i class="fa-solid fa-clock-rotate-left text-primary"></i> Your Recent Calculations
+            </h3>
+            <button @click="clearHistory" class="text-xs text-gray-400 hover:text-red-500 transition-colors">
+              <i class="fa-solid fa-trash mr-1"></i> Clear
+            </button>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div v-for="(h, idx) in calcHistory" :key="idx"
+              class="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition-colors cursor-pointer"
+              @click="cifInput = String(h.cifUsd); form.year = h.year; form.make = h.vehicle; mode = 'calculate'"
+            >
+              <div class="flex justify-between items-start">
+                <div>
+                  <p class="font-medium text-secondary text-sm">{{ h.vehicle }}</p>
+                  <p class="text-xs text-gray-400 mt-0.5">{{ h.year }} · CIF USD {{ h.cifUsd.toLocaleString() }}</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-sm font-semibold text-primary">{{ formatCurrency(h.estimatedTotal, 'UGX') }}</p>
+                  <p class="text-[10px] text-gray-400">{{ new Date(h.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) }}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

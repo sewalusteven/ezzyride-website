@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const { $api } = useNuxtApp()
 const { storageUrl } = useStorage()
+const route = useRoute()
 
 useSeoMeta({
   title: 'Vehicles for Sale | EzzyRide Uganda',
@@ -30,6 +31,8 @@ const filterFuel   = ref('')
 const filterTrans  = ref('')
 const filterYearF  = ref('')
 const filterYearT  = ref('')
+const filterPriceMin = ref('')
+const filterPriceMax = ref(route.query.price_max as string || '')
 const showFilters  = ref(false)
 const searchTimer  = ref<ReturnType<typeof setTimeout> | null>(null)
 
@@ -48,8 +51,6 @@ const statusColor = (s: string) => ({
 
 const statusLabel = (s: string) => s === 'in_transit' ? 'In Transit' : s
 
-const route = useRoute()
-
 const fetchVehicles = async (page = 1) => {
   loading.value = true
   try {
@@ -60,9 +61,8 @@ const fetchVehicles = async (page = 1) => {
     if (filterTrans.value)      params.transmission = filterTrans.value.toLowerCase()
     if (filterYearF.value)      params.year_from    = filterYearF.value
     if (filterYearT.value)      params.year_to      = filterYearT.value
-    // Support price_max from URL (e.g. from tax calculator CTA)
-    const priceMax = route.query.price_max as string | undefined
-    if (priceMax)               params.price_max    = priceMax
+    if (filterPriceMin.value)   params.price_min    = filterPriceMin.value
+    if (filterPriceMax.value)   params.price_max    = filterPriceMax.value
     const { data } = await $api.get('/web/vehicles', { params })
     vehicles.value = data.data
     meta.value     = data.meta
@@ -91,11 +91,12 @@ const applyFilters = () => {
 const resetFilters = () => {
   filterBrand.value = ''; filterFuel.value = ''; filterTrans.value = ''
   filterYearF.value = ''; filterYearT.value = ''; search.value = ''
+  filterPriceMin.value = ''; filterPriceMax.value = ''
   fetchVehicles(1)
 }
 
 const hasFilters = computed(() =>
-  !!(filterBrand.value || filterFuel.value || filterTrans.value || filterYearF.value || filterYearT.value)
+  !!(filterBrand.value || filterFuel.value || filterTrans.value || filterYearF.value || filterYearT.value || filterPriceMin.value || filterPriceMax.value)
 )
 
 const yearOptions = computed(() => {
@@ -203,6 +204,18 @@ onMounted(() => {
                 <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
               </select>
             </div>
+            <!-- Price Min -->
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1.5">Min Price (UGX)</label>
+              <input v-model="filterPriceMin" type="number" min="0" placeholder="e.g. 30000000"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <!-- Price Max -->
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1.5">Max Price (UGX)</label>
+              <input v-model="filterPriceMax" type="number" min="0" placeholder="e.g. 100000000"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
           </div>
           <div class="flex gap-3 mt-4 pt-4 border-t border-gray-100">
             <button @click="applyFilters" class="bg-primary hover:bg-red-700 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors">
@@ -295,13 +308,19 @@ onMounted(() => {
         </div>
 
         <!-- Empty state -->
-        <div v-else class="text-center py-20">
+        <div v-else class="text-center py-16">
           <i class="fa-solid fa-car-side text-5xl text-gray-200 mb-4"></i>
           <p class="text-gray-500 font-medium mb-2">No vehicles found</p>
           <p class="text-gray-400 text-sm mb-6">Try adjusting your filters or search terms.</p>
-          <button @click="resetFilters" class="bg-primary hover:bg-red-700 text-white px-6 py-2.5 rounded-full text-sm font-medium transition-colors">
+          <button @click="resetFilters" class="bg-primary hover:bg-red-700 text-white px-6 py-2.5 rounded-full text-sm font-medium transition-colors mb-8">
             Clear All Filters
           </button>
+          <div class="max-w-md mx-auto">
+            <VehicleAlertForm
+              :prefill-brand="filterBrand ? brands.find(b => String(b.id) === String(filterBrand))?.name : undefined"
+              :prefill-price-max="filterPriceMax ? Number(filterPriceMax) : undefined"
+            />
+          </div>
         </div>
 
         <!-- Pagination -->

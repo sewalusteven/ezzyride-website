@@ -36,6 +36,7 @@ export default defineNuxtConfig({
     '/backoffice/**': { ssr: false },
     // Auth pages — CSR only
     '/auth/**': { ssr: false },
+    '/vehicles': { ssr: false },
     // Truly static pages — prerender at build time for fastest possible load + full SEO
     '/about': { prerender: true },
     '/contact': { prerender: true },

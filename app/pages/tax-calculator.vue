@@ -131,66 +131,29 @@ const calculateAfford = async () => {
   affordLoading.value = true
   affordResult.value = null
 
-  const rate = marketRate.value || 3750
-  const currentYear = new Date().getFullYear()
-
-  // Fetch env levy config first if not already loaded
-  if (!envLevyConfig.value) {
-    try {
-      const { data } = await $api.get('/web/tax-calculator/afford-suggestions', {
-        params: { cif_min: 0, cif_max: 1 } // minimal call just to get config
-      })
-      if (data.data.envLevyConfig) envLevyConfig.value = data.data.envLevyConfig
-    } catch { /* use defaults */ }
-  }
-
-  const partialMin = envLevyConfig.value?.partialAgeMin ?? 9
-  const fullMin    = envLevyConfig.value?.fullAgeMin ?? 11
-
-  // Build 3 tiers based on actual configured thresholds
-  const yearBrackets = [
-    { label: `Under ${partialMin} years`, yearRange: `${currentYear - partialMin + 1}–${currentYear}`, year: currentYear - Math.floor(partialMin / 2) },
-    { label: `${partialMin}–${fullMin} years`, yearRange: `${currentYear - fullMin}–${currentYear - partialMin}`, year: currentYear - Math.floor((partialMin + fullMin) / 2) },
-    { label: `Over ${fullMin} years`, yearRange: `${currentYear - fullMin - 6}–${currentYear - fullMin - 1}`, year: currentYear - fullMin - 3 },
-  ]
-
   try {
-    const tiers: AffordTier[] = []
+    // Single API call — all tiers + suggestions calculated server-side
+    const { data } = await $api.post('/web/tax-calculator/afford', { budget })
+    const res = data.data
 
-    for (const bracket of yearBrackets) {
-      let cifUsd = (budget / 1.65) / rate
+    if (res.envLevyConfig) envLevyConfig.value = res.envLevyConfig
 
-      for (let i = 0; i < 5; i++) {
-        const res = await fetchTaxes({ cif: cifUsd, year: String(bracket.year), isLuxury: false, make: '', isEV: false })
-        const actualTotal = cifUsd * rate + res.totalTax
-        cifUsd = cifUsd * (budget / actualTotal)
-      }
-
-      const finalRes = await fetchTaxes({ cif: cifUsd, year: String(bracket.year), isLuxury: false, make: '', isEV: false })
-
-      tiers.push({
-        label: bracket.label,
-        yearRange: bracket.yearRange,
-        cifUsd: Math.floor(cifUsd),
-        cifUgx: Math.floor(cifUsd * rate),
-        tax: Math.floor(finalRes.totalTax),
-      })
+    affordResult.value = {
+      budget: res.budget,
+      tiers: res.tiers,
+      suggestions: res.matchingVehicles ?? [],
+      popularSearches: res.popularSearches ?? {},
     }
 
-    // Fetch vehicle suggestions based on the best (newest) CIF range
-    let suggestions: SuggestedVehicle[] = []
-    let popularSearches: Record<string, number> = {}
-    try {
-      const bestTier = tiers[0] // highest CIF (newest bracket)
-      const { data } = await $api.get('/web/tax-calculator/afford-suggestions', {
-        params: { cif_min: Math.floor(bestTier.cifUsd * 0.5), cif_max: bestTier.cifUsd }
+    // Track conversion
+    if (import.meta.client && (window as any).fbq) {
+      (window as any).fbq('track', 'Search', {
+        search_string: `Budget: ${budget}`,
+        content_category: 'Afford Calculator',
+        value: budget,
+        currency: 'UGX',
       })
-      suggestions = data.data.matchingVehicles ?? []
-      popularSearches = data.data.popularSearches ?? {}
-      if (data.data.envLevyConfig) envLevyConfig.value = data.data.envLevyConfig
-    } catch { /* suggestions are optional */ }
-
-    affordResult.value = { budget, tiers, suggestions, popularSearches }
+    }
   } catch {
     Notify.failure('Calculation failed. Please try again.')
   } finally {

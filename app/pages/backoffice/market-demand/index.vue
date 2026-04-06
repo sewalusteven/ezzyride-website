@@ -13,9 +13,15 @@ interface Summary {
   total: number; period: string; period_count: number; prev_count: number | null
   change_pct: number | null; unique_models: number; top_model: string | null; top_model_count: number
 }
+interface BudgetBracket { label: string; count: number; percentage: number }
+interface BudgetInsights {
+  total_searches: number; avg_budget: number; min_budget: number; max_budget: number
+  avg_cif_usd: number; distribution: BudgetBracket[]
+}
 interface Stats {
   summary: Summary; top_models: TopModel[]; trend: TrendPoint[]
   granularity: string; latest_batch: { id: number; title: string; review_date: string } | null
+  budget_insights: BudgetInsights | null
 }
 interface CompareModel {
   model: string; total: number; prev_total: number | null; change_pct: number | null
@@ -418,6 +424,57 @@ const pages = (m: Meta) => {
                     </tbody>
                   </table>
                   <div v-else class="p-6 text-center text-gray-400 text-sm">No data yet</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Budget Insights -->
+            <div v-if="stats?.budget_insights" class="bg-white rounded-lg border border-gray-200">
+              <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+                <i class="fa-solid fa-wallet text-primary"></i>
+                <h3 class="font-semibold text-gray-900 text-sm">Buyer Budget Intelligence</h3>
+              </div>
+              <div class="p-5">
+                <!-- Summary cards -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                  <div class="bg-gray-50 rounded-lg p-3 text-center">
+                    <p class="text-xs text-gray-500">Budget Searches</p>
+                    <p class="text-lg font-bold text-gray-900">{{ stats.budget_insights.total_searches.toLocaleString() }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-lg p-3 text-center">
+                    <p class="text-xs text-gray-500">Average Budget</p>
+                    <p class="text-lg font-bold text-primary">UGX {{ Math.round(stats.budget_insights.avg_budget / 1000000) }}M</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-lg p-3 text-center">
+                    <p class="text-xs text-gray-500">Budget Range</p>
+                    <p class="text-sm font-semibold text-gray-700">{{ Math.round(stats.budget_insights.min_budget / 1000000) }}M – {{ Math.round(stats.budget_insights.max_budget / 1000000) }}M</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-lg p-3 text-center">
+                    <p class="text-xs text-gray-500">Avg Affordable CIF</p>
+                    <p class="text-lg font-bold text-secondary">USD {{ stats.budget_insights.avg_cif_usd.toLocaleString() }}</p>
+                  </div>
+                </div>
+
+                <!-- Distribution -->
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Budget Distribution</h4>
+                <div class="space-y-2">
+                  <div v-for="b in stats.budget_insights.distribution" :key="b.label" class="flex items-center gap-3">
+                    <span class="text-xs text-gray-600 w-24 shrink-0">{{ b.label }}</span>
+                    <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                      <div class="bg-primary h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                        :style="{ width: Math.max(b.percentage, 2) + '%' }">
+                        <span v-if="b.percentage > 8" class="text-[10px] text-white font-semibold">{{ b.percentage }}%</span>
+                      </div>
+                    </div>
+                    <span class="text-xs text-gray-500 w-12 text-right">{{ b.count }}</span>
+                  </div>
+                </div>
+
+                <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p class="text-xs text-blue-700">
+                    <i class="fa-solid fa-lightbulb mr-1"></i>
+                    <strong>Insight:</strong> The most common budget bracket tells you where demand is concentrated. Stock vehicles with a total landed cost in the highest-volume bracket for maximum sales velocity.
+                  </p>
                 </div>
               </div>
             </div>

@@ -47,7 +47,8 @@ interface Application {
 const app        = ref<Application | null>(null)
 const financials = ref<{
   actualCifUgx: number | null
-  usdRate: number | null
+  cifUsdRate: number | null
+  uraUsdRate: number | null
   totalDutiesUgx: number | null
   transportCostUgx: number | null
   serviceFeeUgx: number | null
@@ -612,8 +613,8 @@ onMounted(fetch)
                 <p class="text-gray-500 text-xs">Actual CIF (sourced)</p>
                 <p class="font-medium text-gray-800">
                   {{ app.actualCifUsd ? fmtUsd(app.actualCifUsd) : '—' }}
-                  <span v-if="app.actualCifUsd && financials?.usdRate" class="text-xs text-gray-400 ml-1">
-                    ≈ {{ fmtUgx(Math.round(Number(app.actualCifUsd) * financials.usdRate)) }}
+                  <span v-if="app.actualCifUsd && financials?.cifUsdRate" class="text-xs text-gray-400 ml-1">
+                    ≈ {{ fmtUgx(Math.round(Number(app.actualCifUsd) * financials.cifUsdRate)) }}
                   </span>
                 </p>
               </div>

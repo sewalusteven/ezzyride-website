@@ -62,6 +62,9 @@ const submitEmail = async () => {
               { label: 'Import Assistance', to: '/import-assistance' },
               { label: 'About Us', to: '/about' },
               { label: 'Contact Us', to: '/contact' },
+              { label: 'Partner Integrations', to: '/partner-integrations' },
+              { label: 'Terms & Conditions', to: '/terms' },
+              { label: 'Privacy Policy', to: '/privacy' },
             ]" :key="link.to">
               <NuxtLink :to="link.to" class="text-gray-300 hover:text-primary transition-colors text-sm">
                 {{ link.label }}

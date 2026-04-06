@@ -65,6 +65,7 @@ const form = ref({
   name: '', email: '', phone: '',
   budget_usd: '', timeline: 'flexible',
   vehicle_description: '', vehicle_link: '', notes: '',
+  agreed_terms: false,
 })
 
 // ── Valuation search typeahead ─────────────────────────────────────────────
@@ -415,7 +416,11 @@ const faqs = [
                 class="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"></textarea>
             </div>
 
-            <button type="submit" :disabled="submitting"
+            <label class="flex items-start gap-2 text-xs text-gray-500">
+              <input v-model="form.agreed_terms" type="checkbox" required class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary" />
+              <span>I agree to the <NuxtLink to="/terms" target="_blank" class="text-primary hover:underline">Terms & Conditions</NuxtLink> and <NuxtLink to="/privacy" target="_blank" class="text-primary hover:underline">Privacy Policy</NuxtLink>.</span>
+            </label>
+            <button type="submit" :disabled="submitting || !form.agreed_terms"
               class="w-full bg-primary hover:bg-red-700 disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
               <i v-if="submitting" class="fa-solid fa-spinner fa-spin"></i>
               <i v-else class="fa-solid fa-paper-plane"></i>

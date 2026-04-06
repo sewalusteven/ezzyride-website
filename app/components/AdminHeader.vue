@@ -79,6 +79,17 @@ const pageTitle = computed(() => {
                 </NuxtLink>
               </MenuItem>
 
+              <!-- Knowledge Center -->
+              <MenuItem v-slot="{ active }">
+                <NuxtLink
+                  to="/backoffice/knowledge-center"
+                  :class="[active ? 'bg-gray-50 text-gray-900' : 'text-gray-700', 'flex items-center gap-2.5 px-4 py-2 text-sm']"
+                >
+                  <i class="fa-solid fa-book w-4 text-center text-gray-400"></i>
+                  Knowledge Center
+                </NuxtLink>
+              </MenuItem>
+
               <!-- Divider -->
               <div class="my-1 border-t border-gray-100"></div>
 

@@ -122,11 +122,26 @@ const resendInvite = async (u: any) => {
   } catch { /* ignore */ }
 }
 
+// ── Unlock account ──────────────────────────────────────────────────────────
+const unlockAccount = async (u: any) => {
+  if (!confirm(`Unlock account for ${u.name}? They will be able to log in again.`)) return
+  try {
+    await $api.post(`/v1/users/${u.id}/unlock`)
+    Notify.success(`Account for ${u.name} unlocked.`)
+    // Remove locked status from local data
+    u.lockedUntil = null
+    u.failedLoginAttempts = 0
+  } catch (err: any) {
+    Notify.failure(err.response?.data?.message ?? 'Failed to unlock account.')
+  }
+}
+
 // ── Status badge ─────────────────────────────────────────────────────────────
 const statusClass = (status: string) => ({
   active:   'bg-green-100 text-green-700',
   inactive: 'bg-gray-100 text-gray-500',
   pending:  'bg-amber-100 text-amber-700',
+  locked:   'bg-red-100 text-red-700',
 }[status] ?? 'bg-gray-100 text-gray-500')
 </script>
 
@@ -200,6 +215,10 @@ const statusClass = (status: string) => ({
                    <button v-if="can('users.edit') && u.status === 'pending'" @click="resendInvite(u)"
                            class="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors" title="Resend invitation">
                      <i class="fa-solid fa-paper-plane text-xs"></i>
+                   </button>
+                   <button v-if="can('users.unlock') && u.lockedUntil && new Date(u.lockedUntil) > new Date()" @click="unlockAccount(u)"
+                           class="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Unlock account">
+                     <i class="fa-solid fa-lock-open text-xs"></i>
                    </button>
                    <button v-if="can('users.edit')" @click="openEdit(u)"
                            class="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-md transition-colors" title="Edit user">

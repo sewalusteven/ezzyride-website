@@ -9,6 +9,7 @@ const allNavItems = [
   { label: 'Customers',           icon: 'fa-users',           to: '/backoffice/customers',          permission: 'ui.menu.customers' },
   { label: 'Transactions',        icon: 'fa-money-bill-wave', to: '/backoffice/transactions',       permission: 'ui.menu.transactions' },
   { label: 'Market Demand',       icon: 'fa-arrow-trend-up',  to: '/backoffice/market-demand',      permission: 'ui.menu.market-demand' },
+  { label: 'Partners',            icon: 'fa-handshake',       to: '/backoffice/partners',           permission: 'ui.menu.partners' },
   { label: 'Import Applications', icon: 'fa-file-import',     to: '/backoffice/import-applications',permission: 'ui.menu.import-applications' },
   { label: 'Valuations',          icon: 'fa-chart-bar',       to: '/backoffice/valuations',         permission: 'ui.menu.valuations' },
   { label: 'Tax Settings',        icon: 'fa-calculator',      to: '/backoffice/tax-settings',       permission: 'ui.menu.tax-settings' },

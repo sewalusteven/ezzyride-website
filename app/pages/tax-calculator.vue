@@ -8,13 +8,24 @@ useSeoMeta({
   description: 'Calculate precise import duties and taxes for any vehicle based on current Uganda Revenue Authority rates.',
 })
 
+const { $api } = useNuxtApp()
 const { fetchTaxes, formatCurrency } = useTaxUtilities()
 
-// ── Form state ────────────────────────────────────────────────────────────
+// ── Form state ──��─────────────────────────────────────────────────────────
 const form = ref<TaxCalculatorPayload>({ cif: 0, year: '', isLuxury: false, make: '', isEV: false })
 const cifInput        = ref<string>('')
 const selectedValuation = ref<VehicleValuation | null>(null)
 const taxObject       = ref<TaxCalculatorResponse | undefined>()
+const marketRate      = ref<number | null>(null)
+
+// ── Fetch market rate from settings ─────────────────────���────────────────
+onMounted(async () => {
+  try {
+    const { data } = await $api.get('/web/settings')
+    const rate = parseFloat(data.data?.cif_usd_rate)
+    if (rate > 0) marketRate.value = rate
+  } catch { /* fall back to URA rate */ }
+})
 
 // ── Prefill from valuation search ─────────────────────────────────────────
 const prefillVehicle = (vehicle: VehicleValuation) => {
@@ -66,16 +77,18 @@ const displayCif = computed(() => {
   return parsed > 0 ? parsed : (selectedValuation.value ? parseFloat(selectedValuation.value.cif) : 0)
 })
 
+const cifRate = computed(() => marketRate.value ?? taxObject.value?.usdRate ?? 0)
+
 const cifUgx = computed(() => {
   if (!taxObject.value) return '--'
   const c = displayCif.value
-  return c > 0 ? formatCurrency(c * taxObject.value.usdRate, 'UGX') : formatCurrency(taxObject.value.cifUGX ?? 0, 'UGX')
+  return c > 0 ? formatCurrency(c * cifRate.value, 'UGX') : formatCurrency(taxObject.value.cifUGX ?? 0, 'UGX')
 })
 
 const totalAmount = computed(() => {
   if (!taxObject.value) return '--'
   const c = displayCif.value
-  if (c > 0) return formatCurrency(c * taxObject.value.usdRate + taxObject.value.totalTax, 'UGX')
+  if (c > 0) return formatCurrency(c * cifRate.value + taxObject.value.totalTax, 'UGX')
   return formatCurrency(taxObject.value.totalCarValue ?? 0, 'UGX')
 })
 

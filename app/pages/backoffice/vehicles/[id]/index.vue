@@ -334,6 +334,45 @@ const deleteInquiry = async (inquiryId: number) => {
   if (selectedInquiry.value?.id === inquiryId) selectedInquiry.value = null
 }
 
+// ── Download invoice / quote ──────────────────────────────────────────────
+const downloadInvoiceOrQuote = async () => {
+  try {
+    // For partner vehicles with an import application, download the import quote
+    // For direct sales, download the vehicle sale invoice
+    const response = await $api.get(`/v1/vehicles/${id}/sale/invoice`, { responseType: 'blob' })
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `invoice-${vehicle.value?.reference ?? id}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    formError.value = 'Failed to download invoice'
+  }
+}
+
+// ── Release reservation ──────────────────────────────────────────────────
+const releasingReservation = ref(false)
+const releaseReservation = () => {
+  requestConfirm(
+    'Release Reservation',
+    'This will set the vehicle back to "available", detach the customer, and cancel any linked import application. Are you sure?',
+    async () => {
+      releasingReservation.value = true
+      try {
+        await $api.post(`/v1/vehicles/${id}/release-reservation`)
+        formSuccess.value = 'Reservation released — vehicle is now available'
+        await fetchVehicle()
+      } catch (e: any) {
+        formError.value = e.response?.data?.message ?? 'Failed to release reservation'
+      } finally {
+        releasingReservation.value = false
+      }
+    }
+  )
+}
+
 const tabKeys = ['details', 'importation', 'costs', 'transactions', 'client', 'documents', 'enquiries'] as const
 const tabIndex = computed(() => tabKeys.indexOf(tab.value))
 
@@ -371,9 +410,29 @@ const cancelConfirm = () => { confirmState.value.show = false }
           </div>
           <p class="text-sm text-gray-500 mt-0.5">{{ vehicle.category?.name }} · {{ vehicle.colour ?? 'No colour' }} · {{ vehicle.transmission }} · {{ vehicle.fuelType }}</p>
         </div>
-        <NuxtLink :to="`/backoffice/vehicles/${id}/edit`" class="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-600 rounded-md text-sm hover:bg-gray-50">
-          <i class="fa-solid fa-pen"></i> Edit
-        </NuxtLink>
+        <div class="flex items-center gap-2">
+          <!-- Download Invoice/Quote -->
+          <button
+            v-if="vehicle.sale || vehicle.partner"
+            @click="downloadInvoiceOrQuote"
+            class="cursor-pointer flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-600 rounded-md text-sm hover:bg-gray-50"
+          >
+            <i class="fa-solid fa-file-invoice"></i> Download Invoice
+          </button>
+          <!-- Release Reservation -->
+          <button
+            v-if="vehicle.status === 'reserved'"
+            @click="releaseReservation"
+            :disabled="releasingReservation"
+            class="cursor-pointer flex items-center gap-2 px-4 py-2 border border-yellow-400 text-yellow-700 bg-yellow-50 rounded-md text-sm hover:bg-yellow-100 disabled:opacity-50"
+          >
+            <i v-if="releasingReservation" class="fa-solid fa-spinner fa-spin"></i>
+            <i v-else class="fa-solid fa-lock-open"></i> Release Reservation
+          </button>
+          <NuxtLink :to="`/backoffice/vehicles/${id}/edit`" class="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-600 rounded-md text-sm hover:bg-gray-50">
+            <i class="fa-solid fa-pen"></i> Edit
+          </NuxtLink>
+        </div>
       </div>
 
       <!-- Success/Error banner -->

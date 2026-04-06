@@ -22,7 +22,7 @@ onMounted(async () => {
 
 // Contact form
 const form = ref({
-  name: '', email: '', phone: '', subject: '', message: '',
+  name: '', email: '', phone: '', subject: '', message: '', agreed_terms: false,
 })
 const sending   = ref(false)
 const submitted = ref(false)
@@ -276,9 +276,13 @@ const sendMessage = async () => {
                   ></textarea>
                 </div>
                 <p class="text-xs text-gray-400">* Required. Please provide either email or phone so we can reach you.</p>
+                <label class="flex items-start gap-2 text-xs text-gray-500">
+                  <input v-model="form.agreed_terms" type="checkbox" required class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary" />
+                  <span>I agree to the <NuxtLink to="/terms" target="_blank" class="text-primary hover:underline">Terms & Conditions</NuxtLink> and <NuxtLink to="/privacy" target="_blank" class="text-primary hover:underline">Privacy Policy</NuxtLink>.</span>
+                </label>
                 <button
                   type="submit"
-                  :disabled="sending"
+                  :disabled="sending || !form.agreed_terms"
                   class="w-full bg-primary hover:bg-red-700 disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                   <i v-if="sending" class="fa-solid fa-spinner fa-spin"></i>

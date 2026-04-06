@@ -7,6 +7,7 @@ export interface AuthUser {
   phone?: string | null
   role?: string | null
   permissions: string[]
+  twoFactorEnabled?: boolean
 }
 
 interface LoginResponse {
@@ -14,7 +15,11 @@ interface LoginResponse {
   user: AuthUser
 }
 
-const COOKIE_OPTS = { maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' as const }
+const COOKIE_OPTS = {
+  maxAge: 60 * 60 * 24 * 7,
+  sameSite: 'strict' as const,
+  secure: process.env.NODE_ENV === 'production',
+}
 
 export const useAuth = () => {
   const { $api } = useNuxtApp()
@@ -32,10 +37,19 @@ export const useAuth = () => {
     return perms.includes('*') || perms.includes(permission)
   }
 
-  const login = async (email: string, password: string) => {
-    const { data } = await $api.post<ApiResponse<LoginResponse>>('/web/auth/login', { email, password })
+  const login = async (email: string, password: string, otp?: string) => {
+    const payload: Record<string, string> = { email, password }
+    if (otp) payload.otp = otp
+    const { data } = await $api.post<ApiResponse<LoginResponse & { two_factor_required?: boolean }>>('/web/auth/login', payload)
+
+    // 2FA required — don't set token yet
+    if (data.data.two_factor_required) {
+      return { twoFactorRequired: true, email: data.data.email }
+    }
+
     token.value = data.data.token
     user.value  = data.data.user
+    return { twoFactorRequired: false }
   }
 
   const logout = async () => {

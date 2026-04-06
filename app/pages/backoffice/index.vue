@@ -242,6 +242,58 @@ const serviceTypeLabel = (t: string) => ({
         </div>
       </div>
 
+      <!-- ── Vehicle Sales ────────────────────────────────────────────────── -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        <!-- Sales stats -->
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-receipt text-green-600"></i> Vehicle Sales
+          </h3>
+          <div class="space-y-3">
+            <div class="flex justify-between items-end">
+              <div>
+                <p class="text-xs text-gray-500">This Month</p>
+                <p class="text-2xl font-bold text-gray-900">{{ data.sales?.thisMonth ?? 0 }}</p>
+              </div>
+              <p class="text-sm font-semibold text-green-600">{{ fmtUgx(data.sales?.revenueMonth ?? 0) }}</p>
+            </div>
+            <div class="border-t border-gray-100 pt-2 flex justify-between text-xs text-gray-500">
+              <span>All time: {{ data.sales?.total ?? 0 }} sales</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent sales -->
+        <div class="lg:col-span-2 bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <h3 class="text-sm font-semibold text-gray-700">Recent Sales</h3>
+            <NuxtLink to="/backoffice/vehicles?status=sold" class="text-xs text-primary hover:underline">View all</NuxtLink>
+          </div>
+          <div v-if="data.recentSales?.length" class="divide-y divide-gray-50">
+            <NuxtLink
+              v-for="s in data.recentSales"
+              :key="s.id"
+              :to="`/backoffice/vehicles/${s.vehicleId}`"
+              class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors"
+            >
+              <div class="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
+                <i class="fa-solid fa-handshake text-green-600 text-sm"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-800 truncate">{{ s.vehicle }} {{ s.year }}</p>
+                <p class="text-xs text-gray-400">{{ s.reference }} · {{ s.customer }}</p>
+              </div>
+              <div class="text-right shrink-0">
+                <p class="text-sm font-semibold text-gray-900">{{ fmtUgx(s.agreedPrice) }}</p>
+                <p class="text-[10px] text-gray-400">{{ s.saleDate }}</p>
+              </div>
+            </NuxtLink>
+          </div>
+          <p v-else class="px-5 py-8 text-center text-sm text-gray-400">No sales recorded yet.</p>
+        </div>
+      </div>
+
       <!-- ── Recent Vehicles + Active Imports ───────────────────────────────── -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
 

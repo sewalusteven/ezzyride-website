@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { Loading, Notify } from 'notiflix'
+import type { VehicleValuation, TaxCalculatorPayload, TaxCalculatorResponse } from '~/types'
+import { useTaxUtilities } from '~/composables/taxUtilities'
+
 const { $api } = useNuxtApp()
 const { storageUrl } = useStorage()
+const { search: searchValuation, fetchTaxes, formatCurrency } = useTaxUtilities()
 const route = useRoute()
 
 const id = route.params.id as string
@@ -11,8 +15,14 @@ interface Vehicle {
   sellingPrice: string | null; transmission: string; fuelType: string; driveType: string
   mileage: number | null; engineCc: number | null; colour: string | null
   seatingCapacity: number | null; description: string | null; youtubeUrl: string | null
+  cifUsd: string | null
   brand: { id: number; name: string } | null
   category: { id: number; name: string } | null
+  partner: {
+    id: number; name: string; isLocal: boolean
+    defaultCurrency: string | null
+    depositPercentage: number | null; depositNotes: string | null
+  } | null
   primaryImage: string | null
   images: { id: number; path: string; isPrimary: boolean; sortOrder: number }[]
   features: { id: number; name: string; icon: string | null; category: string }[]
@@ -31,6 +41,27 @@ const inqForm    = ref({ name: '', email: '', phone: '', message: '' })
 const sendingInq = ref(false)
 const inqSuccess = ref(false)
 
+// Purchase modal
+const showPurchaseModal = ref(false)
+const purchaseForm      = ref({ name: '', email: '', phone: '', reservation_deposit: '', agreed_terms: false })
+const purchasing        = ref(false)
+const purchaseResult    = ref<{ type: string; reference: string; message: string; partner?: string } | null>(null)
+
+// USD→UGX rate for deposit conversion
+const usdRate = ref<number>(0)
+
+// Settings (pricing)
+const settings = ref<Record<string, string>>({})
+
+// Tax calculator modal
+const showTaxModal         = ref(false)
+const taxSearchQuery       = ref('')
+const taxSearchResults     = ref<VehicleValuation[]>([])
+const taxSearchLoading     = ref(false)
+const selectedValuation    = ref<VehicleValuation | null>(null)
+const taxResult            = ref<TaxCalculatorResponse | null>(null)
+const taxCalculating       = ref(false)
+
 useSeoMeta({
   title: computed(() => vehicle.value ? `${vehicle.value.brand?.name} ${vehicle.value.model} ${vehicle.value.year} | EzzyRide Uganda` : 'Vehicle Details | EzzyRide Uganda'),
   description: computed(() => vehicle.value?.description ?? 'Vehicle details and specifications — EzzyRide Uganda.'),
@@ -38,10 +69,14 @@ useSeoMeta({
 
 onMounted(async () => {
   try {
-    const { data } = await $api.get(`/web/vehicles/${id}`)
-    vehicle.value = data.data
-    // primaryImage relation is not loaded on show(); derive from images array
-    const imgs: { path: string; isPrimary: boolean; sortOrder: number }[] = data.data.images ?? []
+    const [vRes, sRes] = await Promise.all([
+      $api.get(`/web/vehicles/${id}`),
+      $api.get('/web/settings'),
+    ])
+    vehicle.value = vRes.data.data
+    settings.value = sRes.data.data ?? {}
+    usdRate.value = parseFloat(settings.value.cif_usd_rate) || 0
+    const imgs: { path: string; isPrimary: boolean; sortOrder: number }[] = vRes.data.data.images ?? []
     const primary = imgs.find(i => i.isPrimary) ?? imgs[0]
     activeImg.value = primary?.path ?? null
   } catch {
@@ -68,12 +103,34 @@ const youtubeEmbedUrl = computed(() => {
 })
 
 const fmtPrice = (v: string | null) => v ? 'UGX ' + Number(v).toLocaleString() : 'Price on request'
+const fmtUsd   = (v: number) => 'USD ' + v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+const fmtUgx   = (v: number) => 'UGX ' + v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+const fmtCurrency = (v: number, cur: string) => cur.toUpperCase() + ' ' + v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 const fmtMileage = (n: number | null) => n ? n.toLocaleString() + ' km' : '—'
 const fmtCC = (n: number | null) => n ? n.toLocaleString() + ' cc' : '—'
 
 const statusColor = (s: string) => s === 'available'
   ? 'bg-green-100 text-green-700'
   : s === 'reserved' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'
+
+// Partner & deposit info
+const isPartnerVehicle = computed(() => !!vehicle.value?.partner)
+const isInternational  = computed(() => vehicle.value?.partner && !vehicle.value.partner.isLocal)
+// If partner has deposit_percentage, use it; otherwise 100% of CIF upfront
+const depositPercentage = computed(() => {
+  if (!vehicle.value?.partner) return null
+  return vehicle.value.partner.depositPercentage ?? 100
+})
+const partnerCurrency = computed(() => vehicle.value?.partner?.defaultCurrency || 'USD')
+const depositAmount = computed(() => {
+  if (depositPercentage.value === null || !vehicle.value?.cifUsd) return null
+  return Math.round(Number(vehicle.value.cifUsd) * (depositPercentage.value / 100))
+})
+const depositAmountUgx = computed(() => {
+  if (!depositAmount.value || !usdRate.value) return null
+  return Math.round(depositAmount.value * usdRate.value)
+})
+const canPurchase = computed(() => vehicle.value?.status === 'available')
 
 const featuresByCategory = computed(() => {
   const cats: Record<string, typeof vehicle.value.features> = {}
@@ -104,6 +161,128 @@ const sendInquiry = async () => {
     Notify.failure('Failed to send enquiry. Please try again or contact us directly.')
   } finally {
     sendingInq.value = false
+  }
+}
+
+const submitPurchase = async () => {
+  if (!purchaseForm.value.name || (!purchaseForm.value.email && !purchaseForm.value.phone)) {
+    Notify.failure('Please provide your name and at least one contact method.')
+    return
+  }
+  purchasing.value = true
+  try {
+    const payload: Record<string, any> = {
+      name: purchaseForm.value.name,
+      email: purchaseForm.value.email || undefined,
+      phone: purchaseForm.value.phone || undefined,
+    }
+    if (!isInternational.value && purchaseForm.value.reservation_deposit) {
+      payload.reservation_deposit = Number(purchaseForm.value.reservation_deposit)
+    }
+    const { data } = await $api.post(`/web/vehicles/${id}/purchase`, payload)
+    purchaseResult.value = data.data
+    // Update local vehicle status
+    if (vehicle.value) vehicle.value.status = 'reserved'
+  } catch (e: any) {
+    const msg = e?.response?.data?.message || 'Failed to submit purchase request. Please try again.'
+    Notify.failure(msg)
+  } finally {
+    purchasing.value = false
+  }
+}
+
+const closePurchaseModal = () => {
+  showPurchaseModal.value = false
+  purchaseResult.value = null
+  purchaseForm.value = { name: '', email: '', phone: '', reservation_deposit: '', agreed_terms: false }
+}
+
+// ── Tax Calculator Modal ──────────────────────────────────────────────────
+const serviceFeeLabel = computed(() => {
+  if (!vehicle.value?.partner) return null
+  return vehicle.value.partner.isLocal ? 'Sourcing Fee' : 'Full Import Fee'
+})
+const serviceFee = computed(() => {
+  if (!vehicle.value?.partner) return 0
+  const key = vehicle.value.partner.isLocal ? 'pricing_sourcing_only' : 'pricing_full_import'
+  return parseFloat(settings.value[key]?.replace(',', '') || '0') || 0
+})
+const vehicleCifUgx = computed(() => {
+  return vehicle.value?.sellingPrice ? Number(vehicle.value.sellingPrice) : 0
+})
+const taxEstimatedTotal = computed(() => {
+  if (!taxResult.value) return 0
+  return vehicleCifUgx.value + taxResult.value.totalTax + serviceFee.value
+})
+
+const openTaxModal = () => {
+  showTaxModal.value = true
+  selectedValuation.value = null
+  taxResult.value = null
+  taxSearchResults.value = []
+  // Prefill search with brand + model + year
+  const v = vehicle.value
+  if (v) {
+    taxSearchQuery.value = [v.brand?.name, v.model, v.year].filter(Boolean).join(' ')
+    // Auto-search
+    doTaxSearch()
+  }
+}
+
+const closeTaxModal = () => {
+  showTaxModal.value = false
+  selectedValuation.value = null
+  taxResult.value = null
+  taxSearchResults.value = []
+  taxSearchQuery.value = ''
+}
+
+let taxSearchTimeout: ReturnType<typeof setTimeout> | null = null
+const onTaxSearchInput = () => {
+  if (taxSearchTimeout) clearTimeout(taxSearchTimeout)
+  taxSearchTimeout = setTimeout(() => {
+    if (taxSearchQuery.value.length > 2) doTaxSearch()
+  }, 400)
+}
+
+const doTaxSearch = async () => {
+  if (!taxSearchQuery.value.trim()) return
+  taxSearchLoading.value = true
+  try {
+    taxSearchResults.value = await searchValuation(taxSearchQuery.value)
+  } catch {
+    taxSearchResults.value = []
+  } finally {
+    taxSearchLoading.value = false
+  }
+}
+
+const selectTaxValuation = (val: VehicleValuation) => {
+  selectedValuation.value = val
+  taxSearchResults.value = []
+  calculateTax(val)
+}
+
+const clearTaxSelection = () => {
+  selectedValuation.value = null
+  taxResult.value = null
+}
+
+const calculateTax = async (val: VehicleValuation) => {
+  taxCalculating.value = true
+  try {
+    const payload: TaxCalculatorPayload = {
+      cif: parseFloat(val.cif),
+      year: vehicle.value?.year ?? val.year,
+      isLuxury: false,
+      isEV: false,
+      make: val.name,
+    }
+    taxResult.value = await fetchTaxes(payload)
+  } catch {
+    Notify.failure('Failed to calculate taxes. Please try again.')
+  } finally {
+    taxCalculating.value = false
   }
 }
 </script>
@@ -247,7 +426,48 @@ const sendInquiry = async () => {
                 </span>
               </div>
               <p class="text-gray-400 text-sm mb-4">{{ vehicle.reference }}</p>
-              <div class="text-3xl font-bold text-primary mb-5">{{ fmtPrice(vehicle.sellingPrice) }}</div>
+              <div class="mb-5">
+                <div class="text-3xl font-bold text-primary">{{ fmtPrice(vehicle.sellingPrice) }}</div>
+                <p v-if="isInternational" class="text-xs text-gray-500 mt-1">
+                  <i class="fa-solid fa-info-circle mr-1"></i>
+                  CIF Price only — does not include import taxes &amp; duties
+                </p>
+                <p v-else-if="isPartnerVehicle && !isInternational" class="text-xs text-gray-500 mt-1">
+                  <i class="fa-solid fa-info-circle mr-1"></i>
+                  Price includes EzzyRide sourcing fee
+                </p>
+              </div>
+
+              <!-- Partner badge -->
+              <div v-if="isPartnerVehicle" class="mb-4">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full"
+                        :class="isInternational ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'">
+                    <i :class="isInternational ? 'fa-solid fa-globe' : 'fa-solid fa-map-pin'" class="text-[10px]"></i>
+                    {{ isInternational ? 'International' : 'Local' }} Partner
+                  </span>
+                  <span class="text-xs text-gray-500">via {{ vehicle.partner!.name }}</span>
+                </div>
+
+                <!-- Deposit info -->
+                <div v-if="depositPercentage !== null && depositAmount" class="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div class="flex items-center gap-2 mb-1">
+                    <i class="fa-solid fa-hand-holding-dollar text-green-600 text-sm"></i>
+                    <span class="text-sm font-semibold text-green-800">
+                      {{ depositPercentage < 100 ? `Start from ${depositPercentage}% deposit` : 'Full CIF payment required' }}
+                    </span>
+                  </div>
+                  <p class="text-xs text-green-700">
+                    {{ depositPercentage < 100 ? 'Pay as little as' : 'Upfront payment of' }}
+                    <strong>{{ fmtCurrency(depositAmount, partnerCurrency) }}</strong>
+                    <template v-if="depositAmountUgx">
+                      (~<strong>{{ fmtUgx(depositAmountUgx) }}</strong>)
+                    </template>
+                    {{ depositPercentage < 100 ? 'to begin the purchase process.' : 'to start.' }}
+                    {{ vehicle.partner!.depositNotes || (depositPercentage < 100 ? 'Balance payable as per agreed terms.' : '') }}
+                  </p>
+                </div>
+              </div>
 
               <!-- Key specs -->
               <div class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-5">
@@ -311,13 +531,37 @@ const sendInquiry = async () => {
             <!-- Quick actions -->
             <div class="bg-white rounded-xl shadow-sm p-6">
               <div class="grid grid-cols-1 gap-3">
+                <!-- Start Purchase button — only when available -->
+                <button
+                  v-if="canPurchase"
+                  @click="showPurchaseModal = true"
+                  class="w-full flex items-center justify-center gap-2 bg-primary hover:bg-red-700 text-white font-medium py-3 px-5 rounded-lg transition-colors text-sm"
+                >
+                  <i class="fa-solid fa-cart-shopping"></i> Start Purchase
+                </button>
+                <!-- Reserved notice -->
+                <div v-else-if="vehicle.status === 'reserved'" class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
+                  <i class="fa-solid fa-clock text-yellow-600 mb-1"></i>
+                  <p class="text-sm font-medium text-yellow-800">This vehicle is currently reserved</p>
+                  <p class="text-xs text-yellow-600 mt-1">You can still send an enquiry below</p>
+                </div>
+
+                <button
+                  v-if="isInternational"
+                  @click="openTaxModal"
+                  class="w-full flex items-center justify-center gap-2 bg-secondary hover:bg-secondary/90 text-white font-medium py-3 px-5 rounded-lg transition-colors text-sm"
+                >
+                  <i class="fa-solid fa-calculator"></i> Calculate Estimated Total
+                </button>
                 <NuxtLink
-                  :to="`/tax-calculator`"
+                  v-else
+                  to="/tax-calculator"
                   class="w-full flex items-center justify-center gap-2 bg-secondary hover:bg-secondary/90 text-white font-medium py-3 px-5 rounded-lg transition-colors text-sm"
                 >
                   <i class="fa-solid fa-calculator"></i> Calculate Import Tax
                 </NuxtLink>
                 <NuxtLink
+                  v-if="!isPartnerVehicle || isInternational"
                   to="/import-assistance"
                   class="w-full flex items-center justify-center gap-2 border border-primary text-primary hover:bg-primary hover:text-white font-medium py-3 px-5 rounded-lg transition-colors text-sm"
                 >
@@ -406,6 +650,335 @@ const sendInquiry = async () => {
           <i class="fa-solid fa-xmark text-lg"></i>
         </button>
         <img :src="storageUrl(activeImg)" alt="" class="max-h-[90vh] max-w-full object-contain rounded-lg" />
+      </div>
+    </Teleport>
+
+    <!-- Purchase Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showPurchaseModal"
+        class="fixed inset-0 z-[150] bg-black/50 flex items-center justify-center p-4"
+        @click.self="closePurchaseModal"
+      >
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+          <!-- Modal header -->
+          <div class="bg-secondary px-6 py-4 flex items-center justify-between">
+            <h3 class="text-white font-semibold text-lg">Start Purchase</h3>
+            <button @click="closePurchaseModal" class="text-white/70 hover:text-white transition-colors">
+              <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+
+          <!-- Success state -->
+          <div v-if="purchaseResult" class="p-6 text-center">
+            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i class="fa-solid fa-circle-check text-green-600 text-3xl"></i>
+            </div>
+            <h4 class="text-lg font-bold text-secondary mb-2">Request Submitted!</h4>
+            <p class="text-sm text-gray-600 mb-4">{{ purchaseResult.message }}</p>
+            <div class="bg-gray-50 rounded-lg p-3 mb-4">
+              <p class="text-xs text-gray-500">Your reference number</p>
+              <p class="text-lg font-bold text-secondary font-mono">{{ purchaseResult.reference }}</p>
+            </div>
+            <button
+              @click="closePurchaseModal"
+              class="w-full bg-secondary hover:bg-secondary/90 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
+            >
+              Done
+            </button>
+          </div>
+
+          <!-- Form state -->
+          <div v-else class="p-6">
+            <!-- Vehicle summary -->
+            <div v-if="vehicle" class="flex items-center gap-3 bg-gray-50 rounded-lg p-3 mb-5">
+              <img
+                v-if="activeImg"
+                :src="storageUrl(activeImg)"
+                alt=""
+                class="w-16 h-12 object-cover rounded-lg"
+              />
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-secondary truncate">{{ vehicle.brand?.name }} {{ vehicle.model }} {{ vehicle.year }}</p>
+                <p class="text-primary font-bold text-sm">{{ fmtPrice(vehicle.sellingPrice) }}</p>
+              </div>
+            </div>
+
+            <!-- Deposit notice for international partner vehicles -->
+            <div v-if="isInternational && depositAmount" class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <p class="text-xs text-blue-700">
+                <i class="fa-solid fa-info-circle mr-1"></i>
+                {{ depositPercentage! < 100 ? 'Initial deposit' : 'Full CIF payment' }} of
+                <strong>{{ depositPercentage }}% ({{ fmtCurrency(depositAmount, partnerCurrency) }}<template v-if="depositAmountUgx"> / {{ fmtUgx(depositAmountUgx) }}</template>)</strong>
+                required to start the process.
+              </p>
+            </div>
+
+            <p class="text-sm text-gray-600 mb-4">Enter your details and our team will reach out with next steps.</p>
+
+            <form @submit.prevent="submitPurchase" class="space-y-3">
+              <div>
+                <label class="text-xs text-gray-500 mb-1 block">Full name *</label>
+                <input
+                  v-model="purchaseForm.name"
+                  type="text"
+                  required
+                  placeholder="Your full name"
+                  class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div>
+                <label class="text-xs text-gray-500 mb-1 block">Email address</label>
+                <input
+                  v-model="purchaseForm.email"
+                  type="email"
+                  placeholder="you@example.com"
+                  class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div>
+                <label class="text-xs text-gray-500 mb-1 block">Phone / WhatsApp</label>
+                <input
+                  v-model="purchaseForm.phone"
+                  type="tel"
+                  placeholder="+256 700 000 000"
+                  class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <!-- Reservation deposit for non-partner / local partner (direct sale) -->
+              <div v-if="!isInternational">
+                <label class="text-xs text-gray-500 mb-1 block">Reservation Deposit (UGX)</label>
+                <input
+                  v-model="purchaseForm.reservation_deposit"
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 500,000"
+                  class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <p class="text-xs text-gray-400 mt-1">How much you'd like to put down to reserve this vehicle.</p>
+              </div>
+              <p class="text-xs text-gray-400">At least one contact method (email or phone) is required.</p>
+              <label class="flex items-start gap-2 text-xs text-gray-500">
+                <input v-model="purchaseForm.agreed_terms" type="checkbox" required class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary" />
+                <span>I agree to the <NuxtLink to="/terms" target="_blank" class="text-primary hover:underline">Terms & Conditions</NuxtLink> and <NuxtLink to="/privacy" target="_blank" class="text-primary hover:underline">Privacy Policy</NuxtLink>.</span>
+              </label>
+              <button
+                type="submit"
+                :disabled="purchasing || !purchaseForm.agreed_terms"
+                class="w-full bg-primary hover:bg-red-700 disabled:opacity-60 text-white font-semibold py-3 rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
+              >
+                <i v-if="purchasing" class="fa-solid fa-spinner fa-spin"></i>
+                <i v-else class="fa-solid fa-cart-shopping"></i>
+                {{ purchasing ? 'Submitting…' : 'Submit Purchase Request' }}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Tax Calculator Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showTaxModal"
+        class="fixed inset-0 z-[150] bg-black/50 flex items-center justify-center p-4"
+        @click.self="closeTaxModal"
+      >
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <!-- Header -->
+          <div class="bg-secondary px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+            <h3 class="text-white font-semibold text-lg">Import Tax Estimate</h3>
+            <button @click="closeTaxModal" class="text-white/70 hover:text-white transition-colors">
+              <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+
+          <div class="p-6 space-y-5">
+            <!-- Vehicle context -->
+            <div v-if="vehicle" class="bg-gray-50 rounded-lg p-3 flex items-center gap-3">
+              <img
+                v-if="activeImg"
+                :src="storageUrl(activeImg)"
+                alt=""
+                class="w-14 h-10 object-cover rounded-lg"
+              />
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-secondary truncate">{{ vehicle.brand?.name }} {{ vehicle.model }} {{ vehicle.year }}</p>
+                <p class="text-xs text-gray-500">CIF: {{ fmtPrice(vehicle.sellingPrice) }}</p>
+              </div>
+            </div>
+
+            <!-- Search URA valuation -->
+            <div v-if="!selectedValuation">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Search URA Vehicle Valuation</label>
+              <div class="relative">
+                <input
+                  v-model="taxSearchQuery"
+                  @input="onTaxSearchInput"
+                  type="text"
+                  placeholder="Type vehicle make/model (e.g. Honda Vezel)"
+                  class="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary focus:border-primary pr-10"
+                />
+                <div class="absolute right-3 top-1/2 -translate-y-1/2">
+                  <i v-if="taxSearchLoading" class="fa-solid fa-spinner fa-spin text-gray-400"></i>
+                  <i v-else class="fa-solid fa-search text-gray-400"></i>
+                </div>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">Search from URA's official vehicle valuation database</p>
+
+              <!-- Results dropdown -->
+              <div v-if="taxSearchResults.length" class="mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                <div class="text-xs text-gray-500 px-3 py-2 bg-gray-50 font-medium">
+                  Found {{ taxSearchResults.length }} matches
+                </div>
+                <div
+                  v-for="val in taxSearchResults"
+                  :key="val.id"
+                  @click="selectTaxValuation(val)"
+                  class="hover:bg-blue-50 p-3 cursor-pointer border-b border-gray-100 transition"
+                >
+                  <div class="flex justify-between items-start">
+                    <div class="flex-1 min-w-0">
+                      <h4 class="font-medium text-secondary text-sm mb-1">{{ val.name }}</h4>
+                      <div class="grid grid-cols-2 gap-1 text-xs text-gray-600">
+                        <span><i class="fa-solid fa-calendar mr-1"></i>{{ val.year }}</span>
+                        <span><i class="fa-solid fa-gas-pump mr-1"></i>{{ val.cc }} {{ val.unit }}</span>
+                      </div>
+                    </div>
+                    <div class="text-right ml-3 shrink-0">
+                      <div class="text-primary font-bold text-sm">{{ formatCurrency(+val.cif, 'USD') }}</div>
+                      <div class="text-xs text-gray-500">CIF Value</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Selected valuation -->
+            <div v-if="selectedValuation" class="bg-white p-4 rounded-lg border-2 border-primary">
+              <h4 class="font-semibold text-secondary text-sm mb-3 flex items-center">
+                <i class="fa-solid fa-check-circle text-primary mr-2"></i>
+                Selected URA Valuation
+              </h4>
+              <div class="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span class="text-gray-500 text-xs">Model</span>
+                  <p class="font-medium text-secondary">{{ selectedValuation.name }}</p>
+                </div>
+                <div>
+                  <span class="text-gray-500 text-xs">Engine</span>
+                  <p class="font-medium text-secondary">{{ selectedValuation.cc }} {{ selectedValuation.unit }}</p>
+                </div>
+                <div>
+                  <span class="text-gray-500 text-xs">Origin</span>
+                  <p class="font-medium text-secondary">{{ selectedValuation.origin }}</p>
+                </div>
+                <div>
+                  <span class="text-gray-500 text-xs">URA CIF Value</span>
+                  <p class="font-medium text-primary">{{ formatCurrency(+selectedValuation.cif, 'USD') }}</p>
+                </div>
+              </div>
+              <button @click="clearTaxSelection" class="mt-3 text-xs text-primary hover:text-red-600 transition">
+                <i class="fa-solid fa-times mr-1"></i>Change Selection
+              </button>
+            </div>
+
+            <!-- Calculating spinner -->
+            <div v-if="taxCalculating" class="text-center py-6">
+              <i class="fa-solid fa-spinner fa-spin text-3xl text-primary mb-3"></i>
+              <p class="text-sm text-gray-500">Calculating import taxes...</p>
+            </div>
+
+            <!-- Tax results -->
+            <div v-if="taxResult && !taxCalculating" class="space-y-4">
+              <!-- Vehicle CIF (from listing) -->
+              <div class="bg-gray-50 rounded-lg px-4 py-3 text-sm">
+                <div class="flex justify-between items-center">
+                  <span class="font-semibold text-secondary">Vehicle CIF Price</span>
+                  <span class="font-bold text-primary text-base">{{ fmtPrice(vehicle!.sellingPrice) }}</span>
+                </div>
+                <p v-if="vehicle?.cifUsd" class="text-xs text-gray-500 mt-1">
+                  CIF USD {{ fmtUsd(Number(vehicle.cifUsd)) }} converted at market rate
+                </p>
+              </div>
+
+              <div>
+                <h4 class="font-semibold text-secondary text-sm mb-1">Estimated Import Taxes</h4>
+                <p class="text-xs text-gray-500 mb-3">
+                  Taxes are calculated using URA's gazetted valuation rate ({{ fmtUgx(taxResult.usdRate) }}/USD), which may differ from the market rate used for the CIF price above.
+                </p>
+              </div>
+
+              <div class="bg-gray-50 rounded-lg divide-y divide-gray-200 text-sm">
+                <div class="flex justify-between px-4 py-2.5">
+                  <span class="text-gray-600">URA Valuation CIF (UGX)</span>
+                  <span class="font-medium text-gray-500">{{ fmtUgx(taxResult.cifUGX) }}</span>
+                </div>
+                <div class="flex justify-between px-4 py-2.5">
+                  <span class="text-gray-600">Import Duty</span>
+                  <span class="font-medium">{{ fmtUgx(taxResult.importDuty) }}</span>
+                </div>
+                <div class="flex justify-between px-4 py-2.5">
+                  <span class="text-gray-600">VAT</span>
+                  <span class="font-medium">{{ fmtUgx(taxResult.vat) }}</span>
+                </div>
+                <div class="flex justify-between px-4 py-2.5">
+                  <span class="text-gray-600">Withholding Tax</span>
+                  <span class="font-medium">{{ fmtUgx(taxResult.withholding) }}</span>
+                </div>
+                <div v-if="taxResult.envLevy" class="flex justify-between px-4 py-2.5">
+                  <span class="text-gray-600">Environmental Levy</span>
+                  <span class="font-medium">{{ fmtUgx(taxResult.envLevy) }}</span>
+                </div>
+                <div class="flex justify-between px-4 py-2.5">
+                  <span class="text-gray-600">Infrastructure Tax</span>
+                  <span class="font-medium">{{ fmtUgx(taxResult.infrastructureTax) }}</span>
+                </div>
+                <div class="flex justify-between px-4 py-2.5">
+                  <span class="text-gray-600">Import Commission</span>
+                  <span class="font-medium">{{ fmtUgx(taxResult.importCommission) }}</span>
+                </div>
+                <div class="flex justify-between px-4 py-2.5">
+                  <span class="text-gray-600">Form Fees + Stamp Duty + Registration</span>
+                  <span class="font-medium">{{ fmtUgx(taxResult.formFees + taxResult.stampDuty + taxResult.registrationFees) }}</span>
+                </div>
+                <div class="flex justify-between px-4 py-3 font-semibold bg-gray-100">
+                  <span>Total Taxes</span>
+                  <span class="text-secondary">{{ fmtUgx(taxResult.totalTax) }}</span>
+                </div>
+              </div>
+
+              <!-- Service fee -->
+              <div v-if="serviceFee > 0" class="bg-blue-50 rounded-lg px-4 py-3 flex justify-between items-center text-sm">
+                <span class="text-blue-700">
+                  <i class="fa-solid fa-briefcase mr-1"></i>
+                  EzzyRide {{ serviceFeeLabel }}
+                </span>
+                <span class="font-semibold text-blue-800">{{ fmtUgx(serviceFee) }}</span>
+              </div>
+
+              <!-- Estimated total -->
+              <div class="bg-primary/10 border border-primary/20 rounded-lg px-4 py-4">
+                <div class="flex justify-between items-center">
+                  <span class="font-semibold text-secondary">Estimated Total</span>
+                  <span class="text-xl font-bold text-primary">{{ fmtUgx(taxEstimatedTotal) }}</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">
+                  = CIF Price ({{ fmtPrice(vehicle!.sellingPrice) }}) + Taxes ({{ fmtUgx(taxResult.totalTax) }})
+                  <template v-if="serviceFee > 0"> + {{ serviceFeeLabel }} ({{ fmtUgx(serviceFee) }})</template>
+                </p>
+              </div>
+
+              <!-- Exclusions notice -->
+              <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <p class="text-xs text-yellow-800">
+                  <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+                  <strong>Note:</strong> This estimate does not include transport costs (Mombasa to Kampala), port clearance charges, plate registration, and bond fees.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </Teleport>
 

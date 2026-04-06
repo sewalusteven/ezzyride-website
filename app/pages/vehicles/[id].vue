@@ -424,7 +424,7 @@ const calculateTax = async (val: VehicleValuation) => {
                   {{ vehicle.brand?.name }} {{ vehicle.model }}
                 </h1>
                 <span class="text-xs font-semibold px-2.5 py-1 rounded-full capitalize shrink-0 mt-1" :class="statusColor(vehicle.status)">
-                  {{ vehicle.status }}
+                  {{ vehicle.status === 'in_transit' ? 'In Transit' : vehicle.status }}
                 </span>
               </div>
               <p class="text-gray-400 text-sm mb-4">{{ vehicle.reference }}</p>

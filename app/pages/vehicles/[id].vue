@@ -99,8 +99,12 @@ const vehicleDescription = computed(() => {
 })
 
 const vehicleImageUrl = computed(() => {
-  if (!vehicle.value?.primaryImage) return undefined
-  return storageUrl(vehicle.value.primaryImage)
+  if (!vehicle.value) return undefined
+  // Try the dedicated primaryImage field first; fallback to scanning the images array
+  if (vehicle.value.primaryImage) return storageUrl(vehicle.value.primaryImage)
+  const imgs = vehicle.value.images ?? []
+  const primary = imgs.find(i => i.isPrimary) ?? imgs[0]
+  return primary?.path ? storageUrl(primary.path) : undefined
 })
 
 const vehicleUrl = computed(() => `https://ezzyride.ug/vehicles/${id}`)
@@ -113,9 +117,9 @@ useSeoMeta({
   ogTitle: computed(() => vehicleTitle.value ? `${vehicleTitle.value} for Sale` : 'Vehicle | EzzyRide Uganda'),
   ogDescription: vehicleDescription,
   ogImage: vehicleImageUrl,
-  ogImageAlt: computed(() => vehicleTitle.value || 'EzzyRide vehicle'),
-  ogImageWidth: 1200,
-  ogImageHeight: 630,
+  ogImageAlt: computed(() => vehicleImageUrl.value ? (vehicleTitle.value || 'EzzyRide vehicle') : undefined),
+  ogImageWidth: computed(() => vehicleImageUrl.value ? 1200 : undefined),
+  ogImageHeight: computed(() => vehicleImageUrl.value ? 630 : undefined),
   ogType: 'website',
   ogUrl: vehicleUrl,
   ogSiteName: 'EzzyRide Uganda',

@@ -176,6 +176,9 @@ const form = ref({
   social_youtube:   '',
   // Exchange rate
   cif_usd_rate:              '',
+  // Additional import fees (added to estimated total, not taxes)
+  fee_number_plate:          '',
+  fee_third_party_insurance: '',
   // Pricing (UGX)
   pricing_full_import:       '',
   pricing_mombasa_clearance: '',
@@ -573,6 +576,46 @@ const tabs = computed(() => [
               ]" :key="item.key" class="flex justify-between items-center border-b border-gray-100 pb-2">
                 <span class="text-gray-500">{{ item.label }}</span>
                 <span class="font-medium text-secondary">{{ (form as any)[item.key] ? 'UGX ' + (form as any)[item.key] : '—' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Additional Import Fees -->
+          <div class="border-t border-gray-100 pt-5 mt-2">
+            <div class="mb-4">
+              <h3 class="font-semibold text-gray-900 text-sm">Additional Import Fees</h3>
+              <p class="text-xs text-gray-400 mt-0.5">Added to the estimated total cost shown on the website tax calculator (separate from URA taxes).</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">
+                  <i class="fa-solid fa-id-card mr-1 text-primary"></i> Number Plate Registration
+                </label>
+                <div class="flex items-center gap-2">
+                  <span class="text-sm text-gray-400 shrink-0">UGX</span>
+                  <input
+                    v-model="form.fee_number_plate"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="e.g. 714,300"
+                    class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">
+                  <i class="fa-solid fa-shield-halved mr-1 text-primary"></i> 3rd Party Insurance
+                </label>
+                <div class="flex items-center gap-2">
+                  <span class="text-sm text-gray-400 shrink-0">UGX</span>
+                  <input
+                    v-model="form.fee_third_party_insurance"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="e.g. 75,000"
+                    class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
               </div>
             </div>
           </div>

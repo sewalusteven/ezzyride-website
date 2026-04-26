@@ -10,6 +10,7 @@ const navLinks = [
   { label: 'Home',              to: '/' },
   { label: 'Vehicles',          to: '/vehicles' },
   { label: 'Tax Calculator',    to: '/tax-calculator' },
+  { label: 'Budget Estimator',  to: '/budget-estimator' },
   { label: 'Valuations',        to: '/valuations' },
   { label: 'Import Assistance', to: '/import-assistance' },
   { label: 'About Us',          to: '/about' },

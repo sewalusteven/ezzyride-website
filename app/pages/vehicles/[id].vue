@@ -30,11 +30,33 @@ interface Vehicle {
   status: string
 }
 
-const vehicle    = ref<Vehicle | null>(null)
-const loading    = ref(true)
 const notFound   = ref(false)
 const activeImg  = ref<string | null>(null)
 const lightbox   = ref(false)
+
+// Fetch vehicle + settings during SSR so OG meta tags render in initial HTML
+// (essential for WhatsApp/Facebook/Twitter link previews)
+const { data: vehicleData, pending: loading, error: vehicleError } = await useAsyncData(
+  `vehicle-${id}`,
+  async () => {
+    try {
+      const [vRes, sRes] = await Promise.all([
+        $api.get(`/web/vehicles/${id}`),
+        $api.get('/web/settings'),
+      ])
+      return { vehicle: vRes.data.data as Vehicle, settings: (sRes.data.data ?? {}) as Record<string, string> }
+    } catch {
+      return null
+    }
+  },
+)
+
+const vehicle = computed<Vehicle | null>(() => vehicleData.value?.vehicle ?? null)
+
+// Mark not found if no data came back
+watchEffect(() => {
+  notFound.value = !loading.value && (!vehicleData.value?.vehicle || !!vehicleError.value)
+})
 
 // Inquiry form
 const inqForm    = ref({ name: '', email: '', phone: '', message: '' })
@@ -47,11 +69,11 @@ const purchaseForm      = ref({ name: '', email: '', phone: '', reservation_depo
 const purchasing        = ref(false)
 const purchaseResult    = ref<{ type: string; reference: string; message: string; partner?: string } | null>(null)
 
-// USD→UGX rate for deposit conversion
-const usdRate = ref<number>(0)
+// Settings (pricing) — pulled from the same SSR fetch
+const settings = computed<Record<string, string>>(() => vehicleData.value?.settings ?? {})
 
-// Settings (pricing)
-const settings = ref<Record<string, string>>({})
+// USD→UGX rate for deposit conversion
+const usdRate = computed(() => parseFloat(settings.value.cif_usd_rate) || 0)
 
 // Tax calculator modal
 const showTaxModal         = ref(false)
@@ -64,18 +86,45 @@ const taxCalculating       = ref(false)
 
 const vehicleTitle = computed(() => vehicle.value ? `${vehicle.value.brand?.name} ${vehicle.value.model} ${vehicle.value.year}` : '')
 
+const vehicleDescription = computed(() => {
+  if (!vehicle.value) return 'Vehicle details and specifications — EzzyRide Uganda.'
+  const v = vehicle.value
+  const price = v.sellingPrice ? `UGX ${Number(v.sellingPrice).toLocaleString()}` : 'Price on request'
+  const specs = [
+    v.transmission ? v.transmission.charAt(0).toUpperCase() + v.transmission.slice(1) : null,
+    v.fuelType ? v.fuelType.charAt(0).toUpperCase() + v.fuelType.slice(1) : null,
+    v.mileage ? v.mileage.toLocaleString() + ' km' : null,
+  ].filter(Boolean).join(' · ')
+  return `${vehicleTitle.value} — ${price}. ${specs}. Available at EzzyRide Uganda.`
+})
+
+const vehicleImageUrl = computed(() => {
+  if (!vehicle.value?.primaryImage) return undefined
+  return storageUrl(vehicle.value.primaryImage)
+})
+
+const vehicleUrl = computed(() => `https://ezzyride.ug/vehicles/${id}`)
+
 useSeoMeta({
   title: computed(() => vehicleTitle.value ? `${vehicleTitle.value} | EzzyRide Uganda` : 'Vehicle Details | EzzyRide Uganda'),
-  description: computed(() => {
-    if (!vehicle.value) return 'Vehicle details and specifications — EzzyRide Uganda.'
-    const v = vehicle.value
-    const price = v.sellingPrice ? `UGX ${Number(v.sellingPrice).toLocaleString()}` : 'Price on request'
-    return `${vehicleTitle.value} — ${price}. ${v.transmission}, ${v.fuelType}, ${v.mileage ? v.mileage.toLocaleString() + ' km' : ''}. Available at EzzyRide Uganda.`
-  }),
-  ogTitle: computed(() => vehicleTitle.value ? `${vehicleTitle.value} for Sale` : undefined),
-  ogDescription: computed(() => vehicle.value?.description || undefined),
-  ogImage: computed(() => vehicle.value?.primaryImage ? storageUrl(vehicle.value.primaryImage) : undefined),
-  ogType: 'product',
+  description: vehicleDescription,
+
+  // Open Graph (Facebook, WhatsApp, LinkedIn, iMessage, Slack, etc.)
+  ogTitle: computed(() => vehicleTitle.value ? `${vehicleTitle.value} for Sale` : 'Vehicle | EzzyRide Uganda'),
+  ogDescription: vehicleDescription,
+  ogImage: vehicleImageUrl,
+  ogImageAlt: computed(() => vehicleTitle.value || 'EzzyRide vehicle'),
+  ogImageWidth: 1200,
+  ogImageHeight: 630,
+  ogType: 'website',
+  ogUrl: vehicleUrl,
+  ogSiteName: 'EzzyRide Uganda',
+
+  // Twitter / X cards
+  twitterCard: 'summary_large_image',
+  twitterTitle: computed(() => vehicleTitle.value ? `${vehicleTitle.value} for Sale` : 'EzzyRide Uganda'),
+  twitterDescription: vehicleDescription,
+  twitterImage: vehicleImageUrl,
 })
 
 // JSON-LD structured data for Google rich results
@@ -113,23 +162,12 @@ useHead({
   ],
 })
 
-onMounted(async () => {
-  try {
-    const [vRes, sRes] = await Promise.all([
-      $api.get(`/web/vehicles/${id}`),
-      $api.get('/web/settings'),
-    ])
-    vehicle.value = vRes.data.data
-    settings.value = sRes.data.data ?? {}
-    usdRate.value = parseFloat(settings.value.cif_usd_rate) || 0
-    const imgs: { path: string; isPrimary: boolean; sortOrder: number }[] = vRes.data.data.images ?? []
-    const primary = imgs.find(i => i.isPrimary) ?? imgs[0]
-    activeImg.value = primary?.path ?? null
-  } catch {
-    notFound.value = true
-  } finally {
-    loading.value = false
-  }
+// Initialize active image when vehicle data is available
+watchEffect(() => {
+  if (!vehicle.value) return
+  const imgs = vehicle.value.images ?? []
+  const primary = imgs.find(i => i.isPrimary) ?? imgs[0]
+  activeImg.value = primary?.path ?? null
 })
 
 const allImages = computed(() => vehicle.value?.images ?? [])
@@ -229,8 +267,8 @@ const submitPurchase = async () => {
     }
     const { data } = await $api.post(`/web/vehicles/${id}/purchase`, payload)
     purchaseResult.value = data.data
-    // Update local vehicle status
-    if (vehicle.value) vehicle.value.status = 'reserved'
+    // Update local vehicle status (mutate the underlying SSR data)
+    if (vehicleData.value?.vehicle) vehicleData.value.vehicle.status = 'reserved'
   } catch (e: any) {
     const msg = e?.response?.data?.message || 'Failed to submit purchase request. Please try again.'
     Notify.failure(msg)
@@ -258,9 +296,12 @@ const serviceFee = computed(() => {
 const vehicleCifUgx = computed(() => {
   return vehicle.value?.sellingPrice ? Number(vehicle.value.sellingPrice) : 0
 })
+const feeNumberPlate = computed(() => parseFloat(settings.value.fee_number_plate || '0') || 0)
+const feeThirdPartyIns = computed(() => parseFloat(settings.value.fee_third_party_insurance || '0') || 0)
+const additionalFees = computed(() => feeNumberPlate.value + feeThirdPartyIns.value)
 const taxEstimatedTotal = computed(() => {
   if (!taxResult.value) return 0
-  return vehicleCifUgx.value + taxResult.value.totalTax + serviceFee.value
+  return vehicleCifUgx.value + taxResult.value.totalTax + serviceFee.value + additionalFees.value
 })
 
 const openTaxModal = () => {
@@ -1001,6 +1042,18 @@ const calculateTax = async (val: VehicleValuation) => {
                 <span class="font-semibold text-blue-800">{{ fmtUgx(serviceFee) }}</span>
               </div>
 
+              <!-- Other required fees -->
+              <div v-if="additionalFees > 0" class="bg-gray-50 rounded-lg overflow-hidden text-sm">
+                <div v-if="feeNumberPlate > 0" class="flex justify-between items-center px-4 py-2.5 border-b border-gray-200">
+                  <span class="text-gray-600"><i class="fa-solid fa-id-card text-primary mr-1.5"></i>Number Plate Registration</span>
+                  <span class="font-semibold text-gray-700">{{ fmtUgx(feeNumberPlate) }}</span>
+                </div>
+                <div v-if="feeThirdPartyIns > 0" class="flex justify-between items-center px-4 py-2.5">
+                  <span class="text-gray-600"><i class="fa-solid fa-shield-halved text-primary mr-1.5"></i>3rd Party Insurance</span>
+                  <span class="font-semibold text-gray-700">{{ fmtUgx(feeThirdPartyIns) }}</span>
+                </div>
+              </div>
+
               <!-- Estimated total -->
               <div class="bg-primary/10 border border-primary/20 rounded-lg px-4 py-4">
                 <div class="flex justify-between items-center">
@@ -1010,6 +1063,7 @@ const calculateTax = async (val: VehicleValuation) => {
                 <p class="text-xs text-gray-500 mt-2">
                   = CIF Price ({{ fmtPrice(vehicle!.sellingPrice) }}) + Taxes ({{ fmtUgx(taxResult.totalTax) }})
                   <template v-if="serviceFee > 0"> + {{ serviceFeeLabel }} ({{ fmtUgx(serviceFee) }})</template>
+                  <template v-if="additionalFees > 0"> + Plate &amp; Insurance ({{ fmtUgx(additionalFees) }})</template>
                 </p>
               </div>
 
@@ -1017,7 +1071,7 @@ const calculateTax = async (val: VehicleValuation) => {
               <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                 <p class="text-xs text-yellow-800">
                   <i class="fa-solid fa-triangle-exclamation mr-1"></i>
-                  <strong>Note:</strong> This estimate does not include transport costs (Mombasa to Kampala), port clearance charges, plate registration, and bond fees.
+                  <strong>Note:</strong> This estimate does not include transport costs (Mombasa to Kampala), port clearance charges, or bond fees — these vary depending on vehicle weight, current rates, and clearing agent.
                 </p>
               </div>
             </div>
